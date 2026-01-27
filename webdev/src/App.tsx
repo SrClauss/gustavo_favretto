@@ -5,6 +5,7 @@ import NavLayout from './components/NavLayout'
 import { Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
 import Config from './pages/Config'
+import LancamentoRapido from './pages/LancamentoRapido'
 
 
 function Search() {
@@ -26,6 +27,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/config" element={<Config />} />
+        <Route path="/transactions" element={<LancamentoRapido />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>
