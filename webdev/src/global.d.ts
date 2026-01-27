@@ -32,7 +32,8 @@ declare global {
     data: string
     turno: string
     produto: string
-    quantidade: number
+    tamanho_da_fruta: number
+    caixas_processadas: number
   }
 
   interface HorimetroStatus {

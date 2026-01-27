@@ -135,7 +135,7 @@ def delete_parada(parada_id: str):
 # ===== FEEDBACK PRODUÇÃO =====
 
 def create_feedback(data: dict):
-    """Cria um feedback de produção"""
+    """Cria um feedback de produção (tamanho_da_fruta, caixas_processadas)"""
     db = SessionLocal()
     try:
         data_obj = datetime.strptime(data["data"], "%Y-%m-%d").date()
@@ -146,7 +146,8 @@ def create_feedback(data: dict):
             data=data_obj,
             turno=data["turno"],
             produto=data["produto"],
-            quantidade=int(data["quantidade"])
+            tamanho_da_fruta=int(data.get("tamanho_da_fruta", 0)),
+            caixas_processadas=int(data.get("caixas_processadas", 0))
         )
         db.add(feedback)
         db.commit()
@@ -157,7 +158,8 @@ def create_feedback(data: dict):
             "data": feedback.data.isoformat(),
             "turno": feedback.turno,
             "produto": feedback.produto,
-            "quantidade": feedback.quantidade
+            "tamanho_da_fruta": feedback.tamanho_da_fruta,
+            "caixas_processadas": feedback.caixas_processadas
         }, 201
     
     except Exception as e:
@@ -188,14 +190,15 @@ def list_feedbacks(data_str: str = None, extrator_id: str = None):
             "data": f.data.isoformat(),
             "turno": f.turno,
             "produto": f.produto,
-            "quantidade": f.quantidade
+            "tamanho_da_fruta": f.tamanho_da_fruta,
+            "caixas_processadas": f.caixas_processadas
         } for f in feedbacks]
     finally:
         db.close()
 
 
 def update_feedback(feedback_id: str, data: dict):
-    """Atualiza um feedback"""
+    """Atualiza um feedback (tamanho_da_fruta, caixas_processadas)"""
     db = SessionLocal()
     try:
         feedback = db.query(models_sqla.FeedBackProducao).filter(
@@ -207,8 +210,10 @@ def update_feedback(feedback_id: str, data: dict):
         
         if "produto" in data:
             feedback.produto = data["produto"]
-        if "quantidade" in data:
-            feedback.quantidade = int(data["quantidade"])
+        if "tamanho_da_fruta" in data:
+            feedback.tamanho_da_fruta = int(data["tamanho_da_fruta"])
+        if "caixas_processadas" in data:
+            feedback.caixas_processadas = int(data["caixas_processadas"])
         if "turno" in data:
             feedback.turno = data["turno"]
         
@@ -219,7 +224,8 @@ def update_feedback(feedback_id: str, data: dict):
             "data": feedback.data.isoformat(),
             "turno": feedback.turno,
             "produto": feedback.produto,
-            "quantidade": feedback.quantidade
+            "tamanho_da_fruta": feedback.tamanho_da_fruta,
+            "caixas_processadas": feedback.caixas_processadas
         }, 200
     
     except Exception as e:
