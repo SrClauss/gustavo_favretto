@@ -13,7 +13,12 @@ Base.metadata.create_all(bind=engine)
 def get_horimetro_status(extrator_id, data):
     """Retorna quais turnos já foram lançados"""
     return api_horimetro.get_horimetro_status(extrator_id, data)
-
+@eel.expose
+def cawabunga():
+    return "cawabunga"
+@eel.expose
+def soma(a, b):
+    return a + b
 
 @eel.expose
 def get_ultimo_horimetro(extrator_id):

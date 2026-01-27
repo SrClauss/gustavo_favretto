@@ -2,7 +2,7 @@ export {}
 
 declare global {
   type ApiResult<T> = T | { error: string }
-  type EelCall<T> = (...args: unknown[]) => Promise<ApiResult<T>>
+  type EelCall<T> = (...args: unknown[]) => () => Promise<ApiResult<T>>
 
   interface Extrator {
     id: string
@@ -59,7 +59,7 @@ declare global {
 
   interface EelApi {
     list_extratores: EelCall<Extrator[]>
-    say_hello: EelCall<string>
+    cawabunga: EelCall<string>
     get_horimetro_status: EelCall<HorimetroStatus>
     pode_processar: EelCall<{ pode: boolean; status: HorimetroStatus }>
     upsert_horimetro: EelCall<{ id: string }>

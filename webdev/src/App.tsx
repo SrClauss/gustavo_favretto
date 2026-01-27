@@ -1,51 +1,34 @@
 
+
 import './App.css'
-import Sidebar from './components/Sidebar'
-import { Button, Input } from '@mui/material'
-import React from 'react'
+import NavLayout from './components/NavLayout'
+import { Routes, Route } from 'react-router-dom'
+import Home from './pages/Home'
+import Config from './pages/Config'
+
+
+function Search() {
+  return <div style={{ padding: 16 }}>Pesquisar</div>
+}
+function Profile() {
+  return <div style={{ padding: 16 }}>Perfil</div>
+}
+function Settings() {
+  return <div style={{ padding: 16 }}>Ajustes</div>
+}
 
 function App() {
-  const [name, setName] = React.useState('')
-
-
   return (
-    <Sidebar>
-
-      <div style={{ padding: 16 }}>
-        <h1>Controle de Máquinas</h1>
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Digite seu nome"
-          style={{ marginBottom: 16 }}
-        />
-        <br />
-        <Button
-          variant="contained"
-          onClick={async () => {
-            console.log('Botão clicado')
-            console.log('window.eel existe?', !!window.eel)
-            console.log('window.eel.say_hello existe?', window.eel?.say_hello)
-
-            if (window.eel) {
-              console.log('Chamando say_hello com:', name)
-              const result = await window.eel.say_hello(name)
-              if (typeof result === 'object' && result !== null && 'error' in result) {
-                alert(`Erro: ${result.error}`)
-              } else {
-                // result é do tipo string
-                alert(result as string)
-              }
-            } else {
-              alert(`Hello, ${name}! (eel not connected)`)
-            }
-          }}
-        >
-          Cumprimentar
-        </Button>
-      </div>
-       
-    </Sidebar>
+    <Routes>
+      <Route element={<NavLayout />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/search" element={<Search />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/config" element={<Config />} />
+        <Route path="*" element={<Home />} />
+      </Route>
+    </Routes>
   )
 }
 
