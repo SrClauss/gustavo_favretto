@@ -73,6 +73,7 @@ class Horimetro(BaseModel):
     data: str  # formato YYYY-MM-DD
     turno: Turnos
     valor: float
+    observacoes: str | None = None
     created_at: str | None = None
 
     class Config:
