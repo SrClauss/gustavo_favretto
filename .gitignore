@@ -1,0 +1,12 @@
+
+# Python cache
+**/__pycache__/
+*.pyc
+
+# Database files
+data/*.db
+
+# Build artifacts
+web/
+webdev/dist/
+webdev/node_modules/

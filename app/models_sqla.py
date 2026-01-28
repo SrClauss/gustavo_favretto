@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Integer, Boolean, JSON, Date, DateTime, UniqueConstraint, Float
+from sqlalchemy import Column, String, Integer, Boolean, JSON, Date, DateTime, UniqueConstraint, Float, ForeignKey
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Text
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from .db import Base
 
@@ -39,8 +40,22 @@ class Parada(Base):
     motivo = Column(String(36), nullable=False, index=True)
     duracao_minutos = Column(Integer, nullable=False)
     local_parada = Column(String(36), nullable=True, index=True)
-    extratores_parados = Column(Text, nullable=True)  # JSON-encoded list of uuids
     ativo = Column(Boolean, default=True, nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('extrator_id', 'data', 'turno', 'motivo', name='uq_parada_extrator_data_turno_motivo'),
+    )
+
+
+class ParadaExtrator(Base):
+    __tablename__ = 'parada_extrator'
+    id = Column(String(36), primary_key=True)
+    parada_id = Column(String(36), ForeignKey('paradas.id'), nullable=False, index=True)
+    extrator_id = Column(String(36), ForeignKey('extratores.id'), nullable=False, index=True)
+    
+    __table_args__ = (
+        UniqueConstraint('parada_id', 'extrator_id', name='uq_parada_extrator'),
+    )
 
 
 class Horimetro(Base):
@@ -65,4 +80,9 @@ class FeedBackProducao(Base):
     data = Column(Date, nullable=False, index=True)
     turno = Column(String, nullable=False, index=True)
     produto = Column(String, nullable=False, index=True)
-    quantidade = Column(Integer, nullable=False)
+    tamanho_da_fruta = Column(Integer, nullable=False)
+    caixas_processadas = Column(Integer, nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('extrator_id', 'data', 'turno', 'produto', name='uq_feedback_extrator_data_turno_produto'),
+    )

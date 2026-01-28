@@ -96,7 +96,8 @@ class FeedBackProducao(BaseModel):
     data: str  # formato YYYY-MM-DD
     turno: Turnos
     produto: Produto
-    quantidade: int
+    tamanho_da_fruta: int
+    caixas_processadas: int
 
     class Config:
         orm_mode = True
