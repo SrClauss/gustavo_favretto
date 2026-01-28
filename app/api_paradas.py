@@ -13,8 +13,8 @@ def batch_create_paradas(paradas_data: list):
         
         for data in paradas_data:
             data_obj = datetime.strptime(data["data"], "%Y-%m-%d").date()
-            extratores_parados_json = json.dumps([str(e) for e in data.get("extratores_parados", [])])
             
+            # Create parada without extratores_parados
             parada = models_sqla.Parada(
                 id=str(uuid.uuid4()),
                 extrator_id=str(data["extrator_id"]),
@@ -22,11 +22,22 @@ def batch_create_paradas(paradas_data: list):
                 turno=data["turno"],
                 motivo=str(data["motivo"]),
                 duracao_minutos=int(data["duracao_minutos"]),
-                local_parada=str(data["local_parada"]),
-                extratores_parados=extratores_parados_json,
+                local_parada=str(data["local_parada"]) if data.get("local_parada") else None,
                 ativo=True
             )
             db.add(parada)
+            db.flush()  # Get the parada.id
+            
+            # Create parada_extrator relations
+            extratores_ids = data.get("extratores_parados", [])
+            for extrator_id in extratores_ids:
+                parada_extrator = models_sqla.ParadaExtrator(
+                    id=str(uuid.uuid4()),
+                    parada_id=parada.id,
+                    extrator_id=str(extrator_id)
+                )
+                db.add(parada_extrator)
+            
             paradas_criadas.append({
                 "id": parada.id,
                 "extrator_id": parada.extrator_id,
@@ -34,7 +45,8 @@ def batch_create_paradas(paradas_data: list):
                 "turno": parada.turno,
                 "motivo": parada.motivo,
                 "duracao_minutos": parada.duracao_minutos,
-                "local_parada": parada.local_parada
+                "local_parada": parada.local_parada,
+                "extratores_parados": extratores_ids
             })
         
         db.commit()
@@ -62,16 +74,26 @@ def list_paradas(data_str: str = None, extrator_id: str = None):
         
         paradas = query.order_by(models_sqla.Parada.data.desc(), models_sqla.Parada.turno).all()
         
-        return [{
-            "id": p.id,
-            "extrator_id": p.extrator_id,
-            "data": p.data.isoformat(),
-            "turno": p.turno,
-            "motivo": p.motivo,
-            "duracao_minutos": p.duracao_minutos,
-            "local_parada": p.local_parada,
-            "extratores_parados": json.loads(p.extratores_parados) if p.extratores_parados else []
-        } for p in paradas]
+        result = []
+        for p in paradas:
+            # Get extratores_parados from parada_extrator table
+            extratores_parados_query = db.query(models_sqla.ParadaExtrator).filter(
+                models_sqla.ParadaExtrator.parada_id == p.id
+            )
+            extratores_parados = [pe.extrator_id for pe in extratores_parados_query.all()]
+            
+            result.append({
+                "id": p.id,
+                "extrator_id": p.extrator_id,
+                "data": p.data.isoformat(),
+                "turno": p.turno,
+                "motivo": p.motivo,
+                "duracao_minutos": p.duracao_minutos,
+                "local_parada": p.local_parada,
+                "extratores_parados": extratores_parados
+            })
+        
+        return result
     finally:
         db.close()
 
@@ -94,7 +116,30 @@ def update_parada(parada_id: str, data: dict):
         if "turno" in data:
             parada.turno = data["turno"]
         
+        # Update extratores_parados if provided
+        if "extratores_parados" in data:
+            # Remove existing relations
+            db.query(models_sqla.ParadaExtrator).filter(
+                models_sqla.ParadaExtrator.parada_id == parada_id
+            ).delete()
+            
+            # Add new relations
+            for extrator_id in data["extratores_parados"]:
+                parada_extrator = models_sqla.ParadaExtrator(
+                    id=str(uuid.uuid4()),
+                    parada_id=parada_id,
+                    extrator_id=str(extrator_id)
+                )
+                db.add(parada_extrator)
+        
         db.commit()
+        
+        # Get updated extratores_parados
+        extratores_parados_query = db.query(models_sqla.ParadaExtrator).filter(
+            models_sqla.ParadaExtrator.parada_id == parada_id
+        )
+        extratores_parados = [pe.extrator_id for pe in extratores_parados_query.all()]
+        
         return {
             "id": parada.id,
             "extrator_id": parada.extrator_id,
@@ -102,7 +147,8 @@ def update_parada(parada_id: str, data: dict):
             "turno": parada.turno,
             "motivo": parada.motivo,
             "duracao_minutos": parada.duracao_minutos,
-            "local_parada": parada.local_parada
+            "local_parada": parada.local_parada,
+            "extratores_parados": extratores_parados
         }, 200
     
     except Exception as e:
