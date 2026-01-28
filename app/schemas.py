@@ -1,12 +1,6 @@
-from enum import Enum
 from pydantic import BaseModel
-import uuid
-
-
-class Classificacao(str, Enum):
-    DISPONIBILIDADE = "Disponibilidade"
-    PERFORMANCE = "Performance"
-
+from typing import List, Optional
+from enum import Enum
 
 class Turnos(str, Enum):
     TURNO_1 = "06:00 - 14:00"
@@ -14,90 +8,52 @@ class Turnos(str, Enum):
     TURNO_3 = "22:00 - 06:00"
 
 
-class TurnoDia(BaseModel):
-    id: uuid.UUID
-    turno: Turnos
-    dia: str
-    
-
-
-class Produto(str, Enum):
-    ORANGE = "Orange"
-    LIME = "Lime"
-    LEMON = "Lemon"
-    TANGERINE = "Tangerine"
-
+class ClassificacaoParada(str, Enum):
+    DISPONIBILIDADE = 'Disponibilidade'
+    PERFORMANCE = 'Performance'
+    QUALIDADE = 'Qualidade'
 
 class Extrator(BaseModel):
-    id: uuid.UUID
+    id: Optional[str]
     numero: int
     modelo: str
     ativo: bool = True
 
-    class Config:
-        orm_mode = True
-
-
-class Parada(BaseModel):
-    id: uuid.UUID    
-    extrator_id: uuid.UUID
-    data: str  # formato YYYY-MM-DD
-    turno: Turnos
-    motivo: uuid.UUID
-    duracao_minutos: int
-    local_parada: uuid.UUID
-    extratores_parados: list[uuid.UUID] = []
-    ativo: bool = True
-
-    class Config:
-        orm_mode = True
-
-
-
-
 class MotivosParada(BaseModel):
-    id: uuid.UUID
+    id: Optional[str]
     descricao: str
-    classificacao: Classificacao
+    classificacao: ClassificacaoParada
     padrao: bool = False
     ativo: bool = True
-
-    class Config:
-        orm_mode = True
-
-
-
-class Horimetro(BaseModel):
-    id: uuid.UUID
-    extrator_id: uuid.UUID
-    data: str  # formato YYYY-MM-DD
-    turno: Turnos
-    valor: float
-    created_at: str | None = None
-
-    class Config:
-        orm_mode = True
-
 
 class LocalParada(BaseModel):
-    id: uuid.UUID
+    id: Optional[str]
     descricao: str
     padrao: bool = False
     ativo: bool = True
 
-    class Config:
-        orm_mode = True
+class Parada(BaseModel):
+    id: Optional[str]
+    data: str
+    motivo: str
+    hora_inicio: str
+    hora_fim: str
+    local_parada: Optional[str]
+    observacoes: Optional[str]
+    extratores_parados: List[str] = []
+    ativo: bool = True
 
-
+class Horimetro(BaseModel):
+    id: Optional[str]
+    extrator_id: str
+    data: str
+    turno: Turnos
+    minutos_trabalhados: int
+    observacoes: Optional[str]
 
 class FeedBackProducao(BaseModel):
-    id: uuid.UUID
-    extrator_id: uuid.UUID
-    data: str  # formato YYYY-MM-DD
-    turno: Turnos
-    produto: Produto
-    quantidade: int
-
-    class Config:
-        orm_mode = True
-
+    id: Optional[str]
+    data: str
+    produto: str
+    tamanho_da_fruta: float
+    caixas_processadas: int

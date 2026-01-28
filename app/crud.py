@@ -1,14 +1,12 @@
-from typing import List, Optional
+from typing import List
 import uuid
 import json
-from sqlalchemy import func, select, update
-from sqlalchemy.orm import Session
 from contextlib import contextmanager
 import os
 
 from .db import SessionLocal, engine, Base
 from . import schemas as pmodels
-from . import models_sqla as sqm
+from . import models as sqm
 
 # create tables
 Base.metadata.create_all(bind=engine)
@@ -194,15 +192,25 @@ def upsert_parada(item: pmodels.Parada) -> pmodels.Parada:
         extr_list = item.extratores_parados
         extr_json = json.dumps([str(x) for x in extr_list]) if extr_list else None
         if obj is None:
-            obj = sqm.Parada(id=str(item.id or uuid.uuid4()), extrator_id=str(item.extrator_id), motivo=str(item.motivo), duracao_minutos=item.duracao_minutos, local_parada=str(item.local_parada), extratores_parados=extr_json, ativo=item.ativo)
+            obj = sqm.Parada(id=str(item.id or uuid.uuid4()), motivo=str(item.motivo), hora_inicio=item.hora_inicio, hora_fim=item.hora_fim, local_parada=str(item.local_parada), observacoes=item.observacoes, extratores_parados=extr_json, ativo=item.ativo)
             s.add(obj)
+            # Adicionar extratores
+            for extrator_id in extr_list or []:
+                extrator_parado = sqm.ExtratorParado(id=str(uuid.uuid4()), parada_id=obj.id, extrator_id=str(extrator_id))
+                s.add(extrator_parado)
         else:
-            obj.extrator_id = str(item.extrator_id)
             obj.motivo = str(item.motivo)
-            obj.duracao_minutos = item.duracao_minutos
+            obj.hora_inicio = item.hora_inicio
+            obj.hora_fim = item.hora_fim
             obj.local_parada = str(item.local_parada)
+            obj.observacoes = item.observacoes
             obj.extratores_parados = extr_json
             obj.ativo = item.ativo
+            # Atualizar extratores
+            s.query(sqm.ExtratorParado).filter(sqm.ExtratorParado.parada_id == obj.id).delete()
+            for extrator_id in extr_list or []:
+                extrator_parado = sqm.ExtratorParado(id=str(uuid.uuid4()), parada_id=obj.id, extrator_id=str(extrator_id))
+                s.add(extrator_parado)
         s.commit(); s.refresh(obj); return _to_pydantic(pmodels.Parada, obj)
 
 
@@ -256,13 +264,13 @@ def upsert_feedback(item: pmodels.FeedBackProducao) -> pmodels.FeedBackProducao:
     with SessionLocal() as s:
         obj = s.get(sqm.FeedBackProducao, str(item.id)) if item.id else None
         if obj is None:
-            obj = sqm.FeedBackProducao(id=str(item.id or uuid.uuid4()), produto=item.produto.value, tamanho_da_fruta=item.tamanho_da_fruta, caixas_processadas=item.caixas_processadas, dia=item.dia)
+            obj = sqm.FeedBackProducao(id=str(item.id or uuid.uuid4()), data=datetime.strptime(item.data, "%Y-%m-%d").date(), produto=item.produto, tamanho_da_fruta=item.tamanho_da_fruta, caixas_processadas=item.caixas_processadas)
             s.add(obj)
         else:
-            obj.produto = item.produto.value
+            obj.data = datetime.strptime(item.data, "%Y-%m-%d").date()
+            obj.produto = item.produto
             obj.tamanho_da_fruta = item.tamanho_da_fruta
             obj.caixas_processadas = item.caixas_processadas
-            obj.dia = item.dia
         s.commit(); s.refresh(obj); return _to_pydantic(pmodels.FeedBackProducao, obj)
 
 

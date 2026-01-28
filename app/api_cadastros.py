@@ -1,5 +1,5 @@
 from app.db import SessionLocal
-from app import models_sqla, schemas
+from app import models
 from sqlalchemy import String
 import uuid
 
@@ -8,18 +8,18 @@ def list_extratores(search: str = None, apenas_ativos: bool = True):
     """Lista extratores com busca opcional"""
     db = SessionLocal()
     try:
-        query = db.query(models_sqla.Extrator)
+        query = db.query(models.Extrator)
         
         if apenas_ativos:
-            query = query.filter(models_sqla.Extrator.ativo == True)
+            query = query.filter(models.Extrator.ativo == True)
         
         if search:
             query = query.filter(
-                (models_sqla.Extrator.modelo.ilike(f"%{search}%")) |
-                (models_sqla.Extrator.numero.cast(String).ilike(f"%{search}%"))
+                (models.Extrator.modelo.ilike(f"%{search}%")) |
+                (models.Extrator.numero.cast(String).ilike(f"%{search}%"))
             )
         
-        extratores = query.order_by(models_sqla.Extrator.numero).all()
+        extratores = query.order_by(models.Extrator.numero).all()
         
         return [{
             "id": e.id,
@@ -35,7 +35,7 @@ def create_extrator(data: dict):
     """Cria um extrator"""
     db = SessionLocal()
     try:
-        extrator = models_sqla.Extrator(
+        extrator = models.Extrator(
             id=str(uuid.uuid4()),
             numero=int(data["numero"]),
             modelo=data["modelo"],
@@ -62,8 +62,8 @@ def update_extrator(extrator_id: str, data: dict):
     """Atualiza um extrator"""
     db = SessionLocal()
     try:
-        extrator = db.query(models_sqla.Extrator).filter(
-            models_sqla.Extrator.id == extrator_id
+        extrator = db.query(models.Extrator).filter(
+            models.Extrator.id == extrator_id
         ).first()
         
         if not extrator:
@@ -95,8 +95,8 @@ def delete_extrator(extrator_id: str):
     """Soft delete de extrator"""
     db = SessionLocal()
     try:
-        extrator = db.query(models_sqla.Extrator).filter(
-            models_sqla.Extrator.id == extrator_id
+        extrator = db.query(models.Extrator).filter(
+            models.Extrator.id == extrator_id
         ).first()
         
         if not extrator:
@@ -119,15 +119,15 @@ def list_motivos(search: str = None, apenas_ativos: bool = True):
     """Lista motivos de parada com busca opcional"""
     db = SessionLocal()
     try:
-        query = db.query(models_sqla.MotivosParada)
+        query = db.query(models.MotivosParada)
         
         if apenas_ativos:
-            query = query.filter(models_sqla.MotivosParada.ativo == True)
+            query = query.filter(models.MotivosParada.ativo == True)
         
         if search:
-            query = query.filter(models_sqla.MotivosParada.descricao.ilike(f"%{search}%"))
+            query = query.filter(models.MotivosParada.descricao.ilike(f"%{search}%"))
         
-        motivos = query.order_by(models_sqla.MotivosParada.padrao.desc(), models_sqla.MotivosParada.descricao).all()
+        motivos = query.order_by(models.MotivosParada.padrao.desc(), models.MotivosParada.descricao).all()
         
         return [{
             "id": m.id,
@@ -146,9 +146,9 @@ def create_motivo(data: dict):
     try:
         # Se marcar como padrão, desmarca os outros
         if data.get("padrao", False):
-            db.query(models_sqla.MotivosParada).update({"padrao": False})
+            db.query(models.MotivosParada).update({"padrao": False})
         
-        motivo = models_sqla.MotivosParada(
+        motivo = models.MotivosParada(
             id=str(uuid.uuid4()),
             descricao=data["descricao"],
             classificacao=data["classificacao"],
@@ -177,8 +177,8 @@ def update_motivo(motivo_id: str, data: dict):
     """Atualiza um motivo de parada"""
     db = SessionLocal()
     try:
-        motivo = db.query(models_sqla.MotivosParada).filter(
-            models_sqla.MotivosParada.id == motivo_id
+        motivo = db.query(models.MotivosParada).filter(
+            models.MotivosParada.id == motivo_id
         ).first()
         
         if not motivo:
@@ -186,7 +186,7 @@ def update_motivo(motivo_id: str, data: dict):
         
         # Se marcar como padrão, desmarca os outros
         if data.get("padrao", False) and not motivo.padrao:
-            db.query(models_sqla.MotivosParada).update({"padrao": False})
+            db.query(models.MotivosParada).update({"padrao": False})
         
         if "descricao" in data:
             motivo.descricao = data["descricao"]
@@ -217,8 +217,8 @@ def delete_motivo(motivo_id: str):
     """Soft delete de motivo (não permite deletar o padrão)"""
     db = SessionLocal()
     try:
-        motivo = db.query(models_sqla.MotivosParada).filter(
-            models_sqla.MotivosParada.id == motivo_id
+        motivo = db.query(models.MotivosParada).filter(
+            models.MotivosParada.id == motivo_id
         ).first()
         
         if not motivo:
@@ -244,15 +244,15 @@ def list_locais(search: str = None, apenas_ativos: bool = True):
     """Lista locais de parada com busca opcional"""
     db = SessionLocal()
     try:
-        query = db.query(models_sqla.LocalParada)
+        query = db.query(models.LocalParada)
         
         if apenas_ativos:
-            query = query.filter(models_sqla.LocalParada.ativo == True)
+            query = query.filter(models.LocalParada.ativo == True)
         
         if search:
-            query = query.filter(models_sqla.LocalParada.descricao.ilike(f"%{search}%"))
+            query = query.filter(models.LocalParada.descricao.ilike(f"%{search}%"))
         
-        locais = query.order_by(models_sqla.LocalParada.padrao.desc(), models_sqla.LocalParada.descricao).all()
+        locais = query.order_by(models.LocalParada.padrao.desc(), models.LocalParada.descricao).all()
         
         return [{
             "id": l.id,
@@ -270,9 +270,9 @@ def create_local(data: dict):
     try:
         # Se marcar como padrão, desmarca os outros
         if data.get("padrao", False):
-            db.query(models_sqla.LocalParada).update({"padrao": False})
+            db.query(models.LocalParada).update({"padrao": False})
         
-        local = models_sqla.LocalParada(
+        local = models.LocalParada(
             id=str(uuid.uuid4()),
             descricao=data["descricao"],
             padrao=data.get("padrao", False),
@@ -299,8 +299,8 @@ def update_local(local_id: str, data: dict):
     """Atualiza um local de parada"""
     db = SessionLocal()
     try:
-        local = db.query(models_sqla.LocalParada).filter(
-            models_sqla.LocalParada.id == local_id
+        local = db.query(models.LocalParada).filter(
+            models.LocalParada.id == local_id
         ).first()
         
         if not local:
@@ -308,7 +308,7 @@ def update_local(local_id: str, data: dict):
         
         # Se marcar como padrão, desmarca os outros
         if data.get("padrao", False) and not local.padrao:
-            db.query(models_sqla.LocalParada).update({"padrao": False})
+            db.query(models.LocalParada).update({"padrao": False})
         
         if "descricao" in data:
             local.descricao = data["descricao"]
@@ -336,8 +336,8 @@ def delete_local(local_id: str):
     """Soft delete de local (não permite deletar o padrão)"""
     db = SessionLocal()
     try:
-        local = db.query(models_sqla.LocalParada).filter(
-            models_sqla.LocalParada.id == local_id
+        local = db.query(models.LocalParada).filter(
+            models.LocalParada.id == local_id
         ).first()
         
         if not local:

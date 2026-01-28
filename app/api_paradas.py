@@ -1,5 +1,5 @@
 from app.db import SessionLocal
-from app import models_sqla, schemas
+from app import models
 from datetime import datetime
 import uuid
 import json
@@ -15,26 +15,36 @@ def batch_create_paradas(paradas_data: list):
             data_obj = datetime.strptime(data["data"], "%Y-%m-%d").date()
             extratores_parados_json = json.dumps([str(e) for e in data.get("extratores_parados", [])])
             
-            parada = models_sqla.Parada(
+            parada = models.Parada(
                 id=str(uuid.uuid4()),
-                extrator_id=str(data["extrator_id"]),
                 data=data_obj,
-                turno=data["turno"],
                 motivo=str(data["motivo"]),
-                duracao_minutos=int(data["duracao_minutos"]),
-                local_parada=str(data["local_parada"]),
-                extratores_parados=extratores_parados_json,
+                hora_inicio=str(data["hora_inicio"]),
+                hora_fim=str(data["hora_fim"]),
+                local_parada=str(data.get("local_parada")),
+                observacoes=str(data.get("observacoes", "")),
                 ativo=True
             )
             db.add(parada)
+            
+            # Adicionar extratores à relação muitos-para-muitos
+            for extrator_id in data.get("extratores_parados", []):
+                extrator_parado = models.ExtratorParado(
+                    id=str(uuid.uuid4()),
+                    parada_id=parada.id,
+                    extrator_id=str(extrator_id)
+                )
+                db.add(extrator_parado)
+            
             paradas_criadas.append({
                 "id": parada.id,
-                "extrator_id": parada.extrator_id,
                 "data": parada.data.isoformat(),
-                "turno": parada.turno,
                 "motivo": parada.motivo,
-                "duracao_minutos": parada.duracao_minutos,
-                "local_parada": parada.local_parada
+                "hora_inicio": parada.hora_inicio,
+                "hora_fim": parada.hora_fim,
+                "local_parada": parada.local_parada,
+                "observacoes": parada.observacoes,
+                "extratores_parados": data.get("extratores_parados", [])
             })
         
         db.commit()
@@ -51,27 +61,33 @@ def list_paradas(data_str: str = None, extrator_id: str = None):
     """Lista paradas com filtros opcionais"""
     db = SessionLocal()
     try:
-        query = db.query(models_sqla.Parada).filter(models_sqla.Parada.ativo == True)
+        query = db.query(models.Parada).filter(models.Parada.ativo == True)
         
         if data_str:
             data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
-            query = query.filter(models_sqla.Parada.data == data_obj)
+            query = query.filter(models.Parada.data == data_obj)
         
         if extrator_id:
-            query = query.filter(models_sqla.Parada.extrator_id == extrator_id)
+            # Filtrar paradas onde o extrator está relacionado
+            query = query.join(models.ExtratorParado).filter(models.ExtratorParado.extrator_id == extrator_id)
         
-        paradas = query.order_by(models_sqla.Parada.data.desc(), models_sqla.Parada.turno).all()
+        paradas = query.order_by(models.Parada.data.desc()).all()
         
-        return [{
-            "id": p.id,
-            "extrator_id": p.extrator_id,
-            "data": p.data.isoformat(),
-            "turno": p.turno,
-            "motivo": p.motivo,
-            "duracao_minutos": p.duracao_minutos,
-            "local_parada": p.local_parada,
-            "extratores_parados": json.loads(p.extratores_parados) if p.extratores_parados else []
-        } for p in paradas]
+        result = []
+        for p in paradas:
+            # Carregar extratores relacionados
+            extratores_ids = [ep.extrator_id for ep in p.extratores_parados_rel]
+            result.append({
+                "id": p.id,
+                "data": p.data.isoformat(),
+                "motivo": p.motivo,
+                "hora_inicio": p.hora_inicio,
+                "hora_fim": p.hora_fim,
+                "local_parada": p.local_parada,
+                "observacoes": p.observacoes,
+                "extratores_parados": extratores_ids
+            })
+        return result
     finally:
         db.close()
 
@@ -80,29 +96,43 @@ def update_parada(parada_id: str, data: dict):
     """Atualiza uma parada"""
     db = SessionLocal()
     try:
-        parada = db.query(models_sqla.Parada).filter(models_sqla.Parada.id == parada_id).first()
+        parada = db.query(models.Parada).filter(models.Parada.id == parada_id).first()
         
         if not parada:
             return {"error": "Parada não encontrada"}, 404
         
         if "motivo" in data:
             parada.motivo = str(data["motivo"])
-        if "duracao_minutos" in data:
-            parada.duracao_minutos = int(data["duracao_minutos"])
+        if "hora_inicio" in data:
+            parada.hora_inicio = str(data["hora_inicio"])
+        if "hora_fim" in data:
+            parada.hora_fim = str(data["hora_fim"])
         if "local_parada" in data:
             parada.local_parada = str(data["local_parada"])
-        if "turno" in data:
-            parada.turno = data["turno"]
+        if "observacoes" in data:
+            parada.observacoes = str(data["observacoes"])
+        if "extratores_parados" in data:
+            parada.extratores_parados = json.dumps([str(e) for e in data["extratores_parados"]])
+            # Atualizar tabela de associação
+            db.query(models.ExtratorParado).filter(models.ExtratorParado.parada_id == parada_id).delete()
+            for extrator_id in data["extratores_parados"]:
+                extrator_parado = models.ExtratorParado(
+                    id=str(uuid.uuid4()),
+                    parada_id=parada.id,
+                    extrator_id=str(extrator_id)
+                )
+                db.add(extrator_parado)
         
         db.commit()
         return {
             "id": parada.id,
-            "extrator_id": parada.extrator_id,
             "data": parada.data.isoformat(),
-            "turno": parada.turno,
             "motivo": parada.motivo,
-            "duracao_minutos": parada.duracao_minutos,
-            "local_parada": parada.local_parada
+            "hora_inicio": parada.hora_inicio,
+            "hora_fim": parada.hora_fim,
+            "local_parada": parada.local_parada,
+            "observacoes": parada.observacoes,
+            "extratores_parados": json.loads(parada.extratores_parados) if parada.extratores_parados else []
         }, 200
     
     except Exception as e:
@@ -116,7 +146,7 @@ def delete_parada(parada_id: str):
     """Soft delete de uma parada"""
     db = SessionLocal()
     try:
-        parada = db.query(models_sqla.Parada).filter(models_sqla.Parada.id == parada_id).first()
+        parada = db.query(models.Parada).filter(models.Parada.id == parada_id).first()
         
         if not parada:
             return {"error": "Parada não encontrada"}, 404
@@ -135,28 +165,24 @@ def delete_parada(parada_id: str):
 # ===== FEEDBACK PRODUÇÃO =====
 
 def create_feedback(data: dict):
-    """Cria um feedback de produção (tamanho_da_fruta, caixas_processadas)"""
+    """Cria um feedback de produção"""
     db = SessionLocal()
     try:
         data_obj = datetime.strptime(data["data"], "%Y-%m-%d").date()
         
-        feedback = models_sqla.FeedBackProducao(
+        feedback = models.FeedBackProducao(
             id=str(uuid.uuid4()),
-            extrator_id=str(data["extrator_id"]),
             data=data_obj,
-            turno=data["turno"],
             produto=data["produto"],
-            tamanho_da_fruta=int(data.get("tamanho_da_fruta", 0)),
-            caixas_processadas=int(data.get("caixas_processadas", 0))
+            tamanho_da_fruta=float(data["tamanho_da_fruta"]),
+            caixas_processadas=int(data["caixas_processadas"])
         )
         db.add(feedback)
         db.commit()
         
         return {
             "id": feedback.id,
-            "extrator_id": feedback.extrator_id,
             "data": feedback.data.isoformat(),
-            "turno": feedback.turno,
             "produto": feedback.produto,
             "tamanho_da_fruta": feedback.tamanho_da_fruta,
             "caixas_processadas": feedback.caixas_processadas
@@ -169,26 +195,21 @@ def create_feedback(data: dict):
         db.close()
 
 
-def list_feedbacks(data_str: str = None, extrator_id: str = None):
+def list_feedbacks(data_str: str = None):
     """Lista feedbacks com filtros opcionais"""
     db = SessionLocal()
     try:
-        query = db.query(models_sqla.FeedBackProducao)
+        query = db.query(models.FeedBackProducao)
         
         if data_str:
             data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
-            query = query.filter(models_sqla.FeedBackProducao.data == data_obj)
+            query = query.filter(models.FeedBackProducao.data == data_obj)
         
-        if extrator_id:
-            query = query.filter(models_sqla.FeedBackProducao.extrator_id == extrator_id)
-        
-        feedbacks = query.order_by(models_sqla.FeedBackProducao.data.desc(), models_sqla.FeedBackProducao.turno).all()
+        feedbacks = query.order_by(models.FeedBackProducao.data.desc()).all()
         
         return [{
             "id": f.id,
-            "extrator_id": f.extrator_id,
             "data": f.data.isoformat(),
-            "turno": f.turno,
             "produto": f.produto,
             "tamanho_da_fruta": f.tamanho_da_fruta,
             "caixas_processadas": f.caixas_processadas
@@ -198,11 +219,11 @@ def list_feedbacks(data_str: str = None, extrator_id: str = None):
 
 
 def update_feedback(feedback_id: str, data: dict):
-    """Atualiza um feedback (tamanho_da_fruta, caixas_processadas)"""
+    """Atualiza um feedback"""
     db = SessionLocal()
     try:
-        feedback = db.query(models_sqla.FeedBackProducao).filter(
-            models_sqla.FeedBackProducao.id == feedback_id
+        feedback = db.query(models.FeedBackProducao).filter(
+            models.FeedBackProducao.id == feedback_id
         ).first()
         
         if not feedback:
@@ -211,18 +232,14 @@ def update_feedback(feedback_id: str, data: dict):
         if "produto" in data:
             feedback.produto = data["produto"]
         if "tamanho_da_fruta" in data:
-            feedback.tamanho_da_fruta = int(data["tamanho_da_fruta"])
+            feedback.tamanho_da_fruta = float(data["tamanho_da_fruta"])
         if "caixas_processadas" in data:
             feedback.caixas_processadas = int(data["caixas_processadas"])
-        if "turno" in data:
-            feedback.turno = data["turno"]
         
         db.commit()
         return {
             "id": feedback.id,
-            "extrator_id": feedback.extrator_id,
             "data": feedback.data.isoformat(),
-            "turno": feedback.turno,
             "produto": feedback.produto,
             "tamanho_da_fruta": feedback.tamanho_da_fruta,
             "caixas_processadas": feedback.caixas_processadas
@@ -239,8 +256,8 @@ def delete_feedback(feedback_id: str):
     """Deleta um feedback"""
     db = SessionLocal()
     try:
-        feedback = db.query(models_sqla.FeedBackProducao).filter(
-            models_sqla.FeedBackProducao.id == feedback_id
+        feedback = db.query(models.FeedBackProducao).filter(
+            models.FeedBackProducao.id == feedback_id
         ).first()
         
         if not feedback:

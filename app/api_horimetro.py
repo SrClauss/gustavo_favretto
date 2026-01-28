@@ -1,9 +1,8 @@
 from app.db import SessionLocal
-from app import models_sqla, schemas
-from sqlalchemy.exc import IntegrityError
-from datetime import date, datetime
+from app import models
+from app import schemas
+from datetime import  datetime
 import uuid
-import json
 
 
 def get_horimetro_status(extrator_id: str, data_str: str):
@@ -11,16 +10,16 @@ def get_horimetro_status(extrator_id: str, data_str: str):
     db = SessionLocal()
     try:
         data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
-        horimetros = db.query(models_sqla.Horimetro).filter(
-            models_sqla.Horimetro.extrator_id == extrator_id,
-            models_sqla.Horimetro.data == data_obj
+        horimetros = db.query(models.Horimetro).filter(
+            models.Horimetro.extrator_id == extrator_id,
+            models.Horimetro.data == data_obj
         ).all()
         
         turnos_lancados = {h.turno for h in horimetros}
         return {
-            "turno1": schemas.Turnos.TURNO_1.value in turnos_lancados,
-            "turno2": schemas.Turnos.TURNO_2.value in turnos_lancados,
-            "turno3": schemas.Turnos.TURNO_3.value in turnos_lancados
+            "turno1": models.Turnos.TURNO_1.value in turnos_lancados,
+            "turno2": models.Turnos.TURNO_2.value in turnos_lancados,
+            "turno3": models.Turnos.TURNO_3.value in turnos_lancados
         }
     finally:
         db.close()
@@ -30,11 +29,11 @@ def get_ultimo_horimetro(extrator_id: str):
     """Retorna o último horímetro cadastrado para um extrator"""
     db = SessionLocal()
     try:
-        horimetro = db.query(models_sqla.Horimetro).filter(
-            models_sqla.Horimetro.extrator_id == extrator_id
+        horimetro = db.query(models.Horimetro).filter(
+            models.Horimetro.extrator_id == extrator_id
         ).order_by(
-            models_sqla.Horimetro.data.desc(),
-            models_sqla.Horimetro.turno.desc()
+            models.Horimetro.data.desc(),
+            models.Horimetro.turno.desc()
         ).first()
         
         if not horimetro:
@@ -90,9 +89,9 @@ def upsert_horimetro(data: dict):
         data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
 
         # Busca todos os horímetros do dia
-        horimetros_dia = db.query(models_sqla.Horimetro).filter(
-            models_sqla.Horimetro.extrator_id == extrator_id,
-            models_sqla.Horimetro.data == data_obj
+        horimetros_dia = db.query(models.Horimetro).filter(
+            models.Horimetro.extrator_id == extrator_id,
+            models.Horimetro.data == data_obj
         ).all()
 
         # Cria mapa de valores atuais
@@ -162,7 +161,7 @@ def upsert_horimetro(data: dict):
             
             valor_final = float(valor_raw) if valor_raw is not None else 0.0
 
-            novo = models_sqla.Horimetro(
+            novo = models.Horimetro(
                 id=str(uuid.uuid4()),
                 extrator_id=extrator_id,
                 data=data_obj,
@@ -202,23 +201,23 @@ def processar_dia(extrator_id: str, data_str: str):
     try:
         data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
         
-        horimetros = db.query(models_sqla.Horimetro).filter(
-            models_sqla.Horimetro.extrator_id == extrator_id,
-            models_sqla.Horimetro.data == data_obj
-        ).order_by(models_sqla.Horimetro.turno).all()
+        horimetros = db.query(models.Horimetro).filter(
+            models.Horimetro.extrator_id == extrator_id,
+            models.Horimetro.data == data_obj
+        ).order_by(models.Horimetro.turno).all()
         
         if len(horimetros) != 3:
             return {"error": "Todos os 3 turnos devem ser lançados"}, 400
         
         # Busca horímetro anterior ao turno 1
-        horimetro_anterior = db.query(models_sqla.Horimetro).filter(
-            models_sqla.Horimetro.extrator_id == extrator_id
+        horimetro_anterior = db.query(models.Horimetro).filter(
+            models.Horimetro.extrator_id == extrator_id
         ).filter(
-            (models_sqla.Horimetro.data < data_obj) |
-            ((models_sqla.Horimetro.data == data_obj) & (models_sqla.Horimetro.created_at < horimetros[0].created_at))
+            (models.Horimetro.data < data_obj) |
+            ((models.Horimetro.data == data_obj) & (models.Horimetro.created_at < horimetros[0].created_at))
         ).order_by(
-            models_sqla.Horimetro.data.desc(),
-            models_sqla.Horimetro.turno.desc()
+            models.Horimetro.data.desc(),
+            models.Horimetro.turno.desc()
         ).first()
         
         valor_inicial = horimetro_anterior.valor if horimetro_anterior else 0
@@ -255,11 +254,11 @@ def list_horimetros_by_date(date: str):
     db = SessionLocal()
     try:
         data_obj = datetime.strptime(date, "%Y-%m-%d").date()
-        horimetros = db.query(models_sqla.Horimetro).filter(
-            models_sqla.Horimetro.data == data_obj
+        horimetros = db.query(models.Horimetro).filter(
+            models.Horimetro.data == data_obj
         ).order_by(
-            models_sqla.Horimetro.extrator_id,
-            models_sqla.Horimetro.turno
+            models.Horimetro.extrator_id,
+            models.Horimetro.turno
         ).all()
         
         return [{
@@ -278,18 +277,18 @@ def list_horimetros(extrator_id: str = None, data_str: str = None):
     """Lista horímetros com filtros opcionais"""
     db = SessionLocal()
     try:
-        query = db.query(models_sqla.Horimetro)
+        query = db.query(models.Horimetro)
         
         if extrator_id:
-            query = query.filter(models_sqla.Horimetro.extrator_id == extrator_id)
+            query = query.filter(models.Horimetro.extrator_id == extrator_id)
         
         if data_str:
             data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
-            query = query.filter(models_sqla.Horimetro.data == data_obj)
+            query = query.filter(models.Horimetro.data == data_obj)
         
         horimetros = query.order_by(
-            models_sqla.Horimetro.data.desc(),
-            models_sqla.Horimetro.turno
+            models.Horimetro.data.desc(),
+            models.Horimetro.turno
         ).all()
         
         return [{

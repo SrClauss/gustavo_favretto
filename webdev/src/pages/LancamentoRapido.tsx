@@ -1,6 +1,9 @@
-import { Edit, Save, Comment } from "@mui/icons-material";
-import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, TextField, Typography, Badge } from "@mui/material";
+import { Edit, Save, Comment, Add } from "@mui/icons-material";
+import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, TextField, Typography, Badge, Tabs, Tab, Button, Select, MenuItem, FormControl, InputLabel, Checkbox, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 import { useEffect, useState, useReducer } from "react";
+
+const produtos = ['Orange', 'Lime', 'Lemon', 'Tangerine'];
+const NOMINAL_CONSTANT = 110.909090909091 * 5 * 60 * 11 * 24;
 
 type Horimetro = { 
     id: string; 
@@ -11,6 +14,28 @@ type Horimetro = {
     observacoes?: string | null; 
     created_at: string 
 };
+
+type Parada = {
+    id: string;
+    data: string;
+    motivo: string;
+    hora_inicio: string;
+    hora_fim: string;
+    local_parada: string;
+    observacoes?: string;
+    extratores_parados: string[];
+};
+
+type FeedBackProducao = {
+    id: string;
+    data: string;
+    produto: string;
+    tamanho_da_fruta: number;
+    caixas_processadas: number;
+};
+
+type Motivo = { id: string; descricao: string; classificacao: string; padrao: boolean; ativo: boolean };
+type Local = { id: string; descricao: string; padrao: boolean; ativo: boolean };
 
 type HorimetroState = {
     horimetros: Horimetro[];
@@ -53,15 +78,19 @@ function horimetroReducer(state: HorimetroState, action: HorimetroAction): Horim
             return { ...state, tempValor: { ...state.tempValor, [action.key]: action.value } };
         
         case 'CLEAR_TEMP_VALOR': {
-            const { [action.key]: _, ...rest } = state.tempValor;
+            const { [action.key]: __removed, ...rest } = state.tempValor;
+            void __removed;
             return { ...state, tempValor: rest };
         }
         
         case 'SET_TEMP_OBS':
             return { ...state, tempObs: { ...state.tempObs, [action.key]: action.value } };
         
-        case 'CLEAR_TEMP_OBS':
-            return { ...state, tempObs: { ...state.tempObs, [action.key]: '' } };
+        case 'CLEAR_TEMP_OBS': {
+            const { [action.key]: __removed, ...rest } = state.tempObs;
+            void __removed;
+            return { ...state, tempObs: rest };
+        }
         
         case 'TOGGLE_OBS_VISIBLE':
             return { ...state, obsVisible: { ...state.obsVisible, [action.key]: !state.obsVisible[action.key] } };
@@ -77,6 +106,64 @@ export default function LancamentoRapido() {
     const [date, setDate] = useState(new Date());
     const [extratores, setExtratores] = useState<Extrator[]>([]);
     const [state, dispatch] = useReducer(horimetroReducer, initialState);
+
+    const [tabIndex, setTabIndex] = useState<number>(0);
+    const [paradas, setParadas] = useState<Parada[]>([]);
+    const [feedbacks, setFeedbacks] = useState<FeedBackProducao[]>([]);
+    const [motivos, setMotivos] = useState<Motivo[]>([]);
+    const [locais, setLocais] = useState<Local[]>([]);
+    const [paradasEditing, setParadasEditing] = useState<Record<string, boolean>>({});
+    const [novaParadaOpen, setNovaParadaOpen] = useState(false);
+    const [paradaForm, setParadaForm] = useState({
+        motivo: '',
+        hora_inicio: '',
+        hora_fim: '',
+        local_parada: '',
+        observacoes: '',
+        extratores_parados: [] as string[]
+    });
+
+    const [tempTamanho, setTempTamanho] = useState<Record<string, string>>({});
+    const [tempCaixas, setTempCaixas] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        const dateString = date.toISOString().substring(0, 10);
+
+        if (tabIndex === 1) {
+            (async () => {
+                try {
+                    if (!window.eel || typeof window.eel.list_paradas !== 'function') return;
+                    const res = await window.eel.list_paradas(dateString)();
+                    if (Array.isArray(res)) setParadas(res as unknown as Parada[]);
+                } catch (err) {
+                    console.error('Erro ao carregar paradas', err);
+                }
+            })();
+        }
+
+        if (tabIndex === 2) {
+            (async () => {
+                try {
+                    if (!window.eel || typeof window.eel.list_feedbacks !== 'function') return;
+                    const res = await window.eel.list_feedbacks(dateString)();
+                    if (Array.isArray(res)) {
+                        setFeedbacks(res as unknown as FeedBackProducao[]);
+                        // Inicializar temp states
+                        const newTempTamanho: Record<string, string> = {};
+                        const newTempCaixas: Record<string, string> = {};
+                        (res as unknown as FeedBackProducao[]).forEach(f => {
+                            newTempTamanho[f.produto] = f.tamanho_da_fruta.toString();
+                            newTempCaixas[f.produto] = f.caixas_processadas.toString();
+                        });
+                        setTempTamanho(newTempTamanho);
+                        setTempCaixas(newTempCaixas);
+                    }
+                } catch (err) {
+                    console.error('Erro ao carregar feedbacks', err);
+                }
+            })();
+        }
+    }, [tabIndex, date]);
 
     const getFieldKey = (extratorId: string, turno: string) => `${extratorId}-${turno}`;
 
@@ -99,7 +186,7 @@ export default function LancamentoRapido() {
         }
 
         // Prepara payload - só envia o que mudou
-        const payload: any = {
+        const payload: Record<string, unknown> = {
             extrator_id: extratorId, 
             data: dateString, 
             turno
@@ -226,6 +313,88 @@ export default function LancamentoRapido() {
         dispatch({ type: 'TOGGLE_OBS_VISIBLE', key });
     };
 
+    const handleSalvarParada = async () => {
+        const dateString = date.toISOString().substring(0, 10);
+        if (!paradaForm.motivo || !paradaForm.hora_inicio || !paradaForm.hora_fim || paradaForm.extratores_parados.length === 0) {
+            alert('Preencha todos os campos obrigatórios');
+            return;
+        }
+
+        const payload = [{
+            data: dateString,
+            motivo: paradaForm.motivo,
+            hora_inicio: paradaForm.hora_inicio,
+            hora_fim: paradaForm.hora_fim,
+            local_parada: paradaForm.local_parada || null,
+            observacoes: paradaForm.observacoes || '',
+            extratores_parados: paradaForm.extratores_parados
+        }];
+
+        try {
+            const res = await window.eel.batch_create_paradas(payload)();
+            if (res && 'error' in res) {
+                alert(`Erro: ${res.error}`);
+                return;
+            }
+            setNovaParadaOpen(false);
+            setParadaForm({ motivo: '', hora_inicio: '', hora_fim: '', local_parada: '', observacoes: '', extratores_parados: [] });
+            // Reload paradas
+            const dateStringReload = date.toISOString().substring(0, 10);
+            const resReload = await window.eel.list_paradas(dateStringReload)();
+            if (Array.isArray(resReload)) setParadas(resReload as unknown as Parada[]);
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao salvar parada');
+        }
+    };
+
+    const handleSalvarFeedback = async (produto: string) => {
+        const dateString = date.toISOString().substring(0, 10);
+        const tamanho = parseFloat(tempTamanho[produto] || "0") || 0;
+        const caixas = parseInt(tempCaixas[produto] || "0") || 0;
+
+        if (tamanho <= 0 || caixas <= 0) {
+            alert('Preencha tamanho da fruta e caixas processadas válidos');
+            return;
+        }
+
+        const payload = {
+            data: dateString,
+            produto: produto,
+            tamanho_da_fruta: tamanho,
+            caixas_processadas: caixas
+        };
+
+        try {
+            const res = await window.eel.create_feedback(payload)();
+            if (res && 'error' in res) {
+                alert(`Erro: ${res.error}`);
+                return;
+            }
+            // Reload feedbacks
+            const resReload = await window.eel.list_feedbacks(dateString)();
+            if (Array.isArray(resReload)) {
+                setFeedbacks(resReload as unknown as FeedBackProducao[]);
+                // Re-inicializar temp
+                const newTempTamanho: Record<string, string> = {};
+                const newTempCaixas: Record<string, string> = {};
+                (resReload as unknown as FeedBackProducao[]).forEach(f => {
+                    newTempTamanho[f.produto] = f.tamanho_da_fruta.toString();
+                    newTempCaixas[f.produto] = f.caixas_processadas.toString();
+                });
+                setTempTamanho(newTempTamanho);
+                setTempCaixas(newTempCaixas);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao salvar feedback');
+        }
+    };
+
+    const handleEditarParada = (paradaId: string) => {
+        setParadasEditing(prev => ({ ...prev, [paradaId]: true }));
+    };
+
     useEffect(() => {
         // Load extratores
         window.eel.list_extratores()().then((res) => {
@@ -233,6 +402,24 @@ export default function LancamentoRapido() {
                 setExtratores(res as Extrator[]);
             } else if (res && 'error' in res) {
                 console.error('Failed to fetch extratores:', res.error);
+            }
+        });
+
+        // Load motivos
+        window.eel.list_motivos()().then((res) => {
+            if (Array.isArray(res)) {
+                setMotivos(res as Motivo[]);
+            } else if (res && 'error' in res) {
+                console.error('Failed to fetch motivos:', res.error);
+            }
+        });
+
+        // Load locais
+        window.eel.list_locais()().then((res) => {
+            if (Array.isArray(res)) {
+                setLocais(res as Local[]);
+            } else if (res && 'error' in res) {
+                console.error('Failed to fetch locais:', res.error);
             }
         });
 
@@ -273,89 +460,265 @@ export default function LancamentoRapido() {
                 <Input type="date" value={date.toISOString().substring(0, 10)} onChange={(e) => setDate(new Date(e.target.value))} />
             </Box>
 
-            <div>{JSON.stringify(state.horimetros)}</div>
-            <div>{JSON.stringify(extratores)}</div>
-            <Box sx={{ width: '40%', alignSelf: 'center' }}>
-                <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                    {extratores.map((extrator) => (
-                        <Accordion key={extrator.id} sx={{ width: '100%' }}>
-                            <AccordionSummary>
-                                <Typography>Extrator {extrator.numero} - {extrator.modelo}</Typography>
-                            </AccordionSummary>
-                            <AccordionDetails>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                    {TURNOS.map((turno) => {
-                                        const key = getFieldKey(extrator.id, turno);
-                                        const horimetro = findHorimetro(extrator.id, turno);
-                                        const disabled = isDisabled(extrator.id, turno);
-                                        const hasObs = !!horimetro?.observacoes;
-                                        const needsValor = horimetro?.valor === 0 && hasObs;
-                                        
-                                        return (
-                                            <Box key={turno} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
-                                                    <TextField
-                                                        label={turno}
-                                                        variant="outlined"
-                                                        type="number"
-                                                        size="small"
-                                                        disabled={disabled}
-                                                        value={getValorDisplay(extrator.id, turno)}
-                                                        onChange={(e) => handleValorChange(extrator.id, turno, e.target.value)}
-                                                        inputProps={{ inputMode: 'numeric', step: 0.01, min: 0 }}
-                                                        sx={{ flex: 1 }}
-                                                        helperText={needsValor ? 'Valor pendente - preencher' : ''}
-                                                        error={needsValor}
-                                                    />
+            <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} centered>
+                <Tab label="Horímetros" />
+                <Tab label="Paradas" />
+                <Tab label="Feedback Produção" />
+            </Tabs>
 
-                                                    <IconButton 
-                                                        onClick={() => handleSave(extrator.id, turno)}
-                                                        disabled={disabled}
-                                                        color="primary"
-                                                    >
-                                                        <Save />
-                                                    </IconButton>
-                                                    
-                                                    <IconButton 
-                                                        onClick={() => handleEdit(extrator.id, turno)}
-                                                        disabled={!disabled}
-                                                        color="secondary"
-                                                    >
-                                                        <Edit />
-                                                    </IconButton>
-
-                                                    <IconButton onClick={() => toggleObs(extrator.id, turno)} color="inherit">
-                                                        <Badge color="warning" variant={hasObs ? 'dot' : 'standard'}>
-                                                            <Comment />
-                                                        </Badge>
-                                                    </IconButton>
-                                                </Box>
+            {tabIndex === 0 && (
+                <>
+                    <Box sx={{ width: '40%', alignSelf: 'center' }}>
+                        {extratores.length === 0 ? (
+                            <Typography>Não há extratores cadastrados</Typography>
+                        ) : (
+                            <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
+                                {extratores.map((extrator) => (
+                                    <Accordion key={extrator.id} sx={{ width: '100%' }}>
+                                        <AccordionSummary>
+                                            <Typography>Extrator {extrator.numero} - {extrator.modelo}</Typography>
+                                        </AccordionSummary>
+                                        <AccordionDetails>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                {TURNOS.map((turno) => {
+                                                const key = getFieldKey(extrator.id, turno);
+                                                const horimetro = findHorimetro(extrator.id, turno);
+                                                const disabled = isDisabled(extrator.id, turno);
+                                                const hasObs = !!horimetro?.observacoes;
+                                                const needsValor = horimetro?.valor === 0 && hasObs;
                                                 
-                                                {state.obsVisible[key] && (
-                                                    <TextField
-                                                        label="Observações"
-                                                        variant="outlined"
-                                                        size="small"
-                                                        multiline
-                                                        minRows={2}
-                                                        disabled={disabled}
-                                                        value={getObsDisplay(extrator.id, turno)}
-                                                        onChange={(e) => handleObsChange(extrator.id, turno, e.target.value)}
-                                                        fullWidth
-                                                    />
-                                                )}
-                                            </Box>
-                                        );
-                                    })}
-                                </Box>
-                            </AccordionDetails>
+                                                return (
+                                                    <Box key={turno} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
+                                                            <TextField
+                                                                label={turno}
+                                                                variant="outlined"
+                                                                type="number"
+                                                                size="small"
+                                                                disabled={disabled}
+                                                                value={getValorDisplay(extrator.id, turno)}
+                                                                onChange={(e) => handleValorChange(extrator.id, turno, e.target.value)}
+                                                                inputProps={{ inputMode: 'numeric', step: 0.01, min: 0 }}
+                                                                sx={{ flex: 1 }}
+                                                                helperText={needsValor ? 'Valor pendente - preencher' : ''}
+                                                                error={needsValor}
+                                                            />
 
-                        </Accordion>
-                    ))}
+                                                            <IconButton 
+                                                                onClick={() => handleSave(extrator.id, turno)}
+                                                                disabled={disabled}
+                                                                color="primary"
+                                                            >
+                                                                <Save />
+                                                            </IconButton>
+                                                            
+                                                            <IconButton 
+                                                                onClick={() => handleEdit(extrator.id, turno)}
+                                                                disabled={!disabled}
+                                                                color="secondary"
+                                                            >
+                                                                <Edit />
+                                                            </IconButton>
+
+                                                            <IconButton onClick={() => toggleObs(extrator.id, turno)} color="inherit">
+                                                                <Badge color="warning" variant={hasObs ? 'dot' : 'standard'}>
+                                                                    <Comment />
+                                                                </Badge>
+                                                            </IconButton>
+                                                        </Box>
+                                                        
+                                                        {state.obsVisible[key] && (
+                                                            <TextField
+                                                                label="Observações"
+                                                                variant="outlined"
+                                                                size="small"
+                                                                multiline
+                                                                minRows={2}
+                                                                disabled={disabled}
+                                                                value={getObsDisplay(extrator.id, turno)}
+                                                                onChange={(e) => handleObsChange(extrator.id, turno, e.target.value)}
+                                                                fullWidth
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                );
+                                            })}
+                                        </Box>
+                                    </AccordionDetails>
+
+                                </Accordion>
+                            ))}
+                        </Box>
+                        )}
+                    </Box>
+                </>
+            )}
+
+            {tabIndex === 1 && (
+                <Box sx={{ width: '80%', alignSelf: 'center' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                        <Typography variant="h6">Paradas para {date.toISOString().substring(0,10)}</Typography>
+                        <Button variant="contained" startIcon={<Add />} onClick={() => setNovaParadaOpen(true)}>
+                            Nova Parada
+                        </Button>
+                    </Box>
+                    {paradas.length === 0 ? (
+                        <Typography>Sem paradas registradas</Typography>
+                    ) : (
+                        paradas.map(p => (
+                            <Box key={p.id} sx={{ padding: 2, border: '1px solid #eee', borderRadius: 1, marginTop: 1 }}>
+                                <Typography><b>Motivo:</b> {motivos.find(m => m.id === p.motivo)?.descricao || p.motivo} — <b>Horário:</b> {p.hora_inicio} - {p.hora_fim}</Typography>
+                                <Typography><b>Local:</b> {locais.find(l => l.id === p.local_parada)?.descricao || p.local_parada}</Typography>
+                                <Typography><b>Extratores:</b> {p.extratores_parados.map(id => extratores.find(e => e.id === id)?.numero).join(', ')}</Typography>
+                                {p.observacoes && <Typography><b>Observações:</b> {p.observacoes}</Typography>}
+                                {!paradasEditing[p.id] && (
+                                    <Button onClick={() => handleEditarParada(p.id)} startIcon={<Edit />}>Editar</Button>
+                                )}
+                            </Box>
+                        ))
+                    )}
+
+                    <Dialog open={novaParadaOpen} onClose={() => setNovaParadaOpen(false)} maxWidth="md" fullWidth>
+                        <DialogTitle>Nova Parada</DialogTitle>
+                        <DialogContent>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 1 }}>
+                                <FormControl fullWidth>
+                                    <InputLabel>Motivo</InputLabel>
+                                    <Select
+                                        value={paradaForm.motivo}
+                                        onChange={(e) => setParadaForm(prev => ({ ...prev, motivo: e.target.value }))}
+                                        label="Motivo"
+                                    >
+                                        {motivos.filter(m => m.ativo).map(motivo => (
+                                            <MenuItem key={motivo.id} value={motivo.id}>{motivo.descricao}</MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+
+                                <FormControl fullWidth>
+                                    <InputLabel>Local de Parada</InputLabel>
+                                    <Select
+                                        value={paradaForm.local_parada}
+                                        onChange={(e) => setParadaForm(prev => ({ ...prev, local_parada: e.target.value }))}
+                                        label="Local de Parada"
+                                    >
+                                        {locais.filter(l => l.ativo).map(local => (
+                                            <MenuItem key={local.id} value={local.id}>{local.descricao}</MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+
+                                <TextField
+                                    label="Hora Início"
+                                    type="time"
+                                    value={paradaForm.hora_inicio}
+                                    onChange={(e) => setParadaForm(prev => ({ ...prev, hora_inicio: e.target.value }))}
+                                    fullWidth
+                                    InputLabelProps={{ shrink: true }}
+                                />
+
+                                <TextField
+                                    label="Hora Fim"
+                                    type="time"
+                                    value={paradaForm.hora_fim}
+                                    onChange={(e) => setParadaForm(prev => ({ ...prev, hora_fim: e.target.value }))}
+                                    fullWidth
+                                    InputLabelProps={{ shrink: true }}
+                                />
+
+                                <FormControl fullWidth>
+                                    <InputLabel>Extratores Afetados</InputLabel>
+                                    <Select
+                                        multiple
+                                        value={paradaForm.extratores_parados}
+                                        onChange={(e) => setParadaForm(prev => ({ ...prev, extratores_parados: e.target.value as string[] }))}
+                                        renderValue={(selected) => selected.map(id => extratores.find(e => e.id === id)?.numero).join(', ')}
+                                        label="Extratores Afetados"
+                                    >
+                                        {extratores.filter(e => e.ativo).map(extrator => (
+                                            <MenuItem key={extrator.id} value={extrator.id}>
+                                                <Checkbox checked={paradaForm.extratores_parados.indexOf(extrator.id) > -1} />
+                                                <ListItemText primary={`Extrator ${extrator.numero} - ${extrator.modelo}`} />
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+
+                                <TextField
+                                    label="Observações"
+                                    multiline
+                                    rows={3}
+                                    value={paradaForm.observacoes}
+                                    onChange={(e) => setParadaForm(prev => ({ ...prev, observacoes: e.target.value }))}
+                                    fullWidth
+                                />
+                            </Box>
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={() => setNovaParadaOpen(false)}>Cancelar</Button>
+                            <Button onClick={handleSalvarParada} variant="contained">Salvar</Button>
+                        </DialogActions>
+                    </Dialog>
                 </Box>
-            </Box>
+            )}
 
-            
+            {tabIndex === 2 && (
+                <Box sx={{ width: '80%', alignSelf: 'center' }}>
+                    <Typography variant="h6">Feedback Produção para {date.toISOString().substring(0,10)}</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {(() => {
+                            const totalCaixas = produtos.reduce((sum, p) => sum + (parseInt(tempCaixas[p] || "0") || 0), 0);
+                            return produtos.map((produto) => {
+                                const feedback = feedbacks.find(f => f.produto === produto);
+                                const tamanhoStr = tempTamanho[produto] ?? feedback?.tamanho_da_fruta.toString() ?? "";
+                                const caixasStr = tempCaixas[produto] ?? feedback?.caixas_processadas.toString() ?? "";
+                                const tamanho = parseFloat(tamanhoStr || "0") || 0;
+                                const caixas = parseInt(caixasStr || "0") || 0;
+                                const nominal = tamanho > 0 && totalCaixas > 0 ? (NOMINAL_CONSTANT / tamanho) * (caixas / totalCaixas) : 0;
+
+                                return (
+                                    <Box key={produto} sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', padding: 2, border: '1px solid #eee', borderRadius: 1 }}>
+                                        <Typography sx={{ minWidth: 100 }}>{produto}</Typography>
+                                        <TextField
+                                            label="Tamanho da Fruta"
+                                            type="number"
+                                            size="small"
+                                            value={tamanhoStr}
+                                            onChange={(e) => setTempTamanho(prev => ({ ...prev, [produto]: e.target.value }))}
+                                            inputProps={{ step: 0.01, min: 0 }}
+                                            sx={{ flex: 1 }}
+                                        />
+                                        <TextField
+                                            label="Caixas Processadas"
+                                            type="number"
+                                            size="small"
+                                            value={caixasStr}
+                                            onChange={(e) => setTempCaixas(prev => ({ ...prev, [produto]: e.target.value }))}
+                                            inputProps={{ min: 0 }}
+                                            sx={{ flex: 1 }}
+                                        />
+                                        <TextField
+                                            label="Nominal"
+                                            type="number"
+                                            size="small"
+                                            value={nominal.toFixed(2)}
+                                            InputProps={{ readOnly: true }}
+                                            sx={{ flex: 1 }}
+                                        />
+                                        <IconButton 
+                                            onClick={() => handleSalvarFeedback(produto)}
+                                            color="primary"
+                                        >
+                                            <Save />
+                                        </IconButton>
+                                    </Box>
+                                );
+                            });
+                        })()}
+                    </Box>
+                </Box>
+            )}
+
         </Box >
     )
 }

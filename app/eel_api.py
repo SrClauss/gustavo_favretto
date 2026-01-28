@@ -1,10 +1,10 @@
 import eel
 from app import api_horimetro, api_paradas, api_cadastros
-from app.db import Base, SessionLocal, engine
+from app.db import Base, engine, create_database_if_not_exists
 
 
 # Inicializa o banco de dados
-Base.metadata.create_all(bind=engine)
+create_database_if_not_exists()
 
 
 # ===== HORÍMETRO =====
@@ -103,9 +103,9 @@ def create_feedback(data):
 
 
 @eel.expose
-def list_feedbacks(data=None, extrator_id=None):
+def list_feedbacks(data=None):
     """Lista feedbacks"""
-    return api_paradas.list_feedbacks(data, extrator_id)
+    return api_paradas.list_feedbacks(data)
 
 
 @eel.expose
