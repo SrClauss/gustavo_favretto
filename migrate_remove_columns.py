@@ -49,10 +49,14 @@ try:
     # Restore data
     print(f"Restoring {len(paradas_backup)} paradas...")
     for parada in paradas_backup:
-        cursor.execute("""
-            INSERT INTO paradas_new (id, extrator_id, data, motivo, duracao_minutos, local_parada, ativo)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, parada)
+        try:
+            cursor.execute("""
+                INSERT INTO paradas_new (id, extrator_id, data, motivo, duracao_minutos, local_parada, ativo)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, parada)
+        except sqlite3.IntegrityError:
+            # Skip duplicates (same extrator_id + data + motivo)
+            print(f"  Warning: Skipping duplicate parada for extrator {parada[1]} on {parada[2]}, motivo {parada[3]}")
     
     # Replace old table
     cursor.execute("DROP TABLE paradas")

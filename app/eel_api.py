@@ -103,9 +103,9 @@ def create_feedback(data):
 
 
 @eel.expose
-def list_feedbacks(data=None, extrator_id=None):
+def list_feedbacks(data=None):
     """Lista feedbacks"""
-    return api_paradas.list_feedbacks(data, extrator_id)
+    return api_paradas.list_feedbacks(data)
 
 
 @eel.expose

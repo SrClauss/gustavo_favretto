@@ -209,7 +209,7 @@ def create_feedback(data: dict):
         db.close()
 
 
-def list_feedbacks(data_str: str = None, extrator_id: str = None):
+def list_feedbacks(data_str: str = None):
     """Lista feedbacks com filtros opcionais"""
     db = SessionLocal()
     try:
