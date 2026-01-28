@@ -295,7 +295,12 @@ export default function LancamentoRapido() {
             return;
         }
 
-        // Create a parada for each selected extrator
+        if (newParada.duracao_minutos <= 0) {
+            alert('A duração deve ser maior que zero');
+            return;
+        }
+
+        // Create a parada with relations to multiple extractors
         const paradasData = newParada.extratores_parados.map(extratorId => ({
             extrator_id: extratorId,
             data: dateString,
@@ -353,6 +358,11 @@ export default function LancamentoRapido() {
 
         if (!newFeedback.extrator_id || !newFeedback.produto) {
             alert('Preencha todos os campos obrigatórios');
+            return;
+        }
+
+        if (newFeedback.tamanho_da_fruta <= 0 || newFeedback.caixas_processadas <= 0) {
+            alert('Tamanho da fruta e caixas processadas devem ser maiores que zero');
             return;
         }
 
@@ -577,7 +587,8 @@ export default function LancamentoRapido() {
                             type="number"
                             size="small"
                             value={newParada.duracao_minutos}
-                            onChange={(e) => setNewParada({ ...newParada, duracao_minutos: parseInt(e.target.value) || 0 })}
+                            onChange={(e) => setNewParada({ ...newParada, duracao_minutos: Math.max(0, parseInt(e.target.value) || 0) })}
+                            inputProps={{ min: 0 }}
                             fullWidth
                         />
 
@@ -708,7 +719,8 @@ export default function LancamentoRapido() {
                             type="number"
                             size="small"
                             value={newFeedback.tamanho_da_fruta}
-                            onChange={(e) => setNewFeedback({ ...newFeedback, tamanho_da_fruta: parseInt(e.target.value) || 0 })}
+                            onChange={(e) => setNewFeedback({ ...newFeedback, tamanho_da_fruta: Math.max(0, parseInt(e.target.value) || 0) })}
+                            inputProps={{ min: 0 }}
                             fullWidth
                         />
 
@@ -717,7 +729,8 @@ export default function LancamentoRapido() {
                             type="number"
                             size="small"
                             value={newFeedback.caixas_processadas}
-                            onChange={(e) => setNewFeedback({ ...newFeedback, caixas_processadas: parseInt(e.target.value) || 0 })}
+                            onChange={(e) => setNewFeedback({ ...newFeedback, caixas_processadas: Math.max(0, parseInt(e.target.value) || 0) })}
+                            inputProps={{ min: 0 }}
                             fullWidth
                         />
 

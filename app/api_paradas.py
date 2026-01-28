@@ -31,12 +31,16 @@ def batch_create_paradas(paradas_data: list):
             # Create parada_extrator relations
             extratores_ids = data.get("extratores_parados", [])
             for extrator_id in extratores_ids:
-                parada_extrator = models_sqla.ParadaExtrator(
-                    id=str(uuid.uuid4()),
-                    parada_id=parada.id,
-                    extrator_id=str(extrator_id)
-                )
-                db.add(parada_extrator)
+                try:
+                    parada_extrator = models_sqla.ParadaExtrator(
+                        id=str(uuid.uuid4()),
+                        parada_id=parada.id,
+                        extrator_id=str(extrator_id)
+                    )
+                    db.add(parada_extrator)
+                except Exception:
+                    # Skip if relation already exists
+                    pass
             
             paradas_criadas.append({
                 "id": parada.id,

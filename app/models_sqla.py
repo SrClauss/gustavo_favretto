@@ -41,6 +41,10 @@ class Parada(Base):
     duracao_minutos = Column(Integer, nullable=False)
     local_parada = Column(String(36), nullable=True, index=True)
     ativo = Column(Boolean, default=True, nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('extrator_id', 'data', 'turno', 'motivo', name='uq_parada_extrator_data_turno_motivo'),
+    )
 
 
 class ParadaExtrator(Base):
@@ -78,3 +82,7 @@ class FeedBackProducao(Base):
     produto = Column(String, nullable=False, index=True)
     tamanho_da_fruta = Column(Integer, nullable=False)
     caixas_processadas = Column(Integer, nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('extrator_id', 'data', 'turno', 'produto', name='uq_feedback_extrator_data_turno_produto'),
+    )
