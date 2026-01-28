@@ -46,6 +46,7 @@ def get_ultimo_horimetro(extrator_id: str):
             "data": horimetro.data.isoformat(),
             "turno": horimetro.turno,
             "valor": horimetro.valor,
+            "observacoes": getattr(horimetro, 'observacoes', None),
             "created_at": horimetro.created_at.isoformat()
         }
     finally:
@@ -66,44 +67,83 @@ def validar_sequencia_turno(extrator_id: str, data_str: str, turno: str):
 
 
 def upsert_horimetro(data: dict):
-    """Cria/atualiza horímetro com validações de sequência e diferença"""
+    """Cria/atualiza horímetro com validações do mesmo dia:
+    - Diferença máxima de 8h entre turnos consecutivos
+    - Valores em ordem crescente (T1 <= T2 <= T3)
+    """
     db = SessionLocal()
     try:
         extrator_id = str(data["extrator_id"])
         data_str = data["data"]
         turno = data["turno"]
-        valor = float(data["valor"])
-        
-        # Valida sequência de turnos
-        valido, erro = validar_sequencia_turno(extrator_id, data_str, turno)
-        if not valido:
-            return {"error": erro}, 400
-        
-        # Busca último horímetro
-        ultimo = get_ultimo_horimetro(extrator_id)
-        
-        if ultimo:
-            diferenca = valor - ultimo["valor"]
-            
-            if diferenca < 0:
-                return {"error": "Horímetro não pode regredir (valor menor que o anterior)"}, 400
-            
-            if diferenca > 8:
-                return {"error": f"Diferença de {diferenca:.2f}h excede o máximo de 8h por turno"}, 400
-        
-        # Cria ou atualiza
+        valor_raw = data.get("valor", None)
+        observacoes = data.get("observacoes", None)
+
+        # Converte valor se fornecido
+        valor = None
+        if valor_raw is not None:
+            try:
+                valor = float(valor_raw)
+            except Exception:
+                return {"error": "Valor inválido"}, 400
+
         data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
-        
-        # Verifica se já existe
-        existente = db.query(models_sqla.Horimetro).filter(
+
+        # Busca todos os horímetros do dia
+        horimetros_dia = db.query(models_sqla.Horimetro).filter(
             models_sqla.Horimetro.extrator_id == extrator_id,
-            models_sqla.Horimetro.data == data_obj,
-            models_sqla.Horimetro.turno == turno
-        ).first()
-        
+            models_sqla.Horimetro.data == data_obj
+        ).all()
+
+        # Cria mapa de valores atuais
+        valores_turnos = {}
+        existente = None
+        for h in horimetros_dia:
+            if h.turno == turno:
+                existente = h
+            valores_turnos[h.turno] = h.valor
+
+        # Se estamos salvando/atualizando um valor, atualiza o mapa
+        if valor is not None:
+            valores_turnos[turno] = valor
+
+        # Valida regras de negócio (apenas se estamos alterando um valor)
+        if valor is not None:
+            T1 = schemas.Turnos.TURNO_1.value
+            T2 = schemas.Turnos.TURNO_2.value
+            T3 = schemas.Turnos.TURNO_3.value
+
+            # Validação 1: Ordem crescente
+            if T1 in valores_turnos and T2 in valores_turnos:
+                if valores_turnos[T2] < valores_turnos[T1]:
+                    return {"error": f"Turno 2 ({valores_turnos[T2]}h) não pode ser menor que Turno 1 ({valores_turnos[T1]}h)"}, 400
+
+            if T2 in valores_turnos and T3 in valores_turnos:
+                if valores_turnos[T3] < valores_turnos[T2]:
+                    return {"error": f"Turno 3 ({valores_turnos[T3]}h) não pode ser menor que Turno 2 ({valores_turnos[T2]}h)"}, 400
+
+            if T1 in valores_turnos and T3 in valores_turnos:
+                if valores_turnos[T3] < valores_turnos[T1]:
+                    return {"error": f"Turno 3 ({valores_turnos[T3]}h) não pode ser menor que Turno 1 ({valores_turnos[T1]}h)"}, 400
+
+            # Validação 2: Diferença máxima de 8h entre turnos consecutivos
+            if T1 in valores_turnos and T2 in valores_turnos:
+                diff = valores_turnos[T2] - valores_turnos[T1]
+                if diff > 8:
+                    return {"error": f"Diferença entre Turno 1 e Turno 2 ({diff:.2f}h) excede o máximo de 8h"}, 400
+
+            if T2 in valores_turnos and T3 in valores_turnos:
+                diff = valores_turnos[T3] - valores_turnos[T2]
+                if diff > 8:
+                    return {"error": f"Diferença entre Turno 2 e Turno 3 ({diff:.2f}h) excede o máximo de 8h"}, 400
+
+        # Update de registro existente
         if existente:
-            existente.valor = valor
-            existente.created_at = datetime.utcnow()
+            if valor is not None:
+                existente.valor = valor
+                existente.created_at = datetime.utcnow()
+            if observacoes is not None:
+                existente.observacoes = observacoes
             db.commit()
             return {
                 "id": existente.id,
@@ -111,15 +151,24 @@ def upsert_horimetro(data: dict):
                 "data": existente.data.isoformat(),
                 "turno": existente.turno,
                 "valor": existente.valor,
+                "observacoes": existente.observacoes,
                 "created_at": existente.created_at.isoformat()
             }, 200
+        
+        # Criação de novo registro
         else:
+            if valor_raw is None and observacoes is None:
+                return {"error": "Valor ou observações são necessários para criar um horímetro"}, 400
+            
+            valor_final = float(valor_raw) if valor_raw is not None else 0.0
+
             novo = models_sqla.Horimetro(
                 id=str(uuid.uuid4()),
                 extrator_id=extrator_id,
                 data=data_obj,
                 turno=turno,
-                valor=valor,
+                valor=valor_final,
+                observacoes=observacoes,
                 created_at=datetime.utcnow()
             )
             db.add(novo)
@@ -130,9 +179,9 @@ def upsert_horimetro(data: dict):
                 "data": novo.data.isoformat(),
                 "turno": novo.turno,
                 "valor": novo.valor,
+                "observacoes": novo.observacoes,
                 "created_at": novo.created_at.isoformat()
             }, 201
-    
     except Exception as e:
         db.rollback()
         return {"error": str(e)}, 500
@@ -200,6 +249,31 @@ def processar_dia(extrator_id: str, data_str: str):
         db.close()
 
 
+
+def list_horimetros_by_date(date: str):
+    """Lista horímetros para uma data específica"""
+    db = SessionLocal()
+    try:
+        data_obj = datetime.strptime(date, "%Y-%m-%d").date()
+        horimetros = db.query(models_sqla.Horimetro).filter(
+            models_sqla.Horimetro.data == data_obj
+        ).order_by(
+            models_sqla.Horimetro.extrator_id,
+            models_sqla.Horimetro.turno
+        ).all()
+        
+        return [{
+            "id": h.id,
+            "extrator_id": h.extrator_id,
+            "data": h.data.isoformat(),
+            "turno": h.turno,
+            "valor": h.valor,
+            "observacoes": getattr(h, 'observacoes', None),
+            "created_at": h.created_at.isoformat()
+        } for h in horimetros]
+    finally:
+        db.close()
+    
 def list_horimetros(extrator_id: str = None, data_str: str = None):
     """Lista horímetros com filtros opcionais"""
     db = SessionLocal()
@@ -224,6 +298,7 @@ def list_horimetros(extrator_id: str = None, data_str: str = None):
             "data": h.data.isoformat(),
             "turno": h.turno,
             "valor": h.valor,
+            "observacoes": getattr(h, 'observacoes', None),
             "created_at": h.created_at.isoformat()
         } for h in horimetros]
     finally:

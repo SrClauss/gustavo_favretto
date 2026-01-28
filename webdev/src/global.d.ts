@@ -35,6 +35,14 @@ declare global {
     tamanho_da_fruta: number
     caixas_processadas: number
   }
+  interface Horimetro {
+    id: string
+    extrator_id: string
+    data: string
+    turno: string
+    valor: number
+    created_at: string
+  }
 
   interface HorimetroStatus {
     turno1: boolean
@@ -66,6 +74,10 @@ declare global {
     upsert_horimetro: EelCall<{ id: string }>
     get_ultimo_horimetro: EelCall<{ id: string; extrator_id: string; data: string; turno: string; valor: number; created_at: string } | null>
     processar_dia: EelCall<ProcessoResult>
+    list_horimetros_by_date: EelCall<{ id: string; extrator_id: string; data: string; turno: string; valor: number; created_at: string }[]>
+
+
+
 
     batch_create_paradas: EelCall<{ id: string }[]>
     list_paradas: EelCall<{

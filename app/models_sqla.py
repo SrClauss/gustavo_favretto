@@ -49,6 +49,7 @@ class Horimetro(Base):
     extrator_id = Column(String(36), nullable=False, index=True)
     data = Column(Date, nullable=False, index=True)
     turno = Column(String, nullable=False, index=True)
+    observacoes = Column(Text, nullable=True)
     valor = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     

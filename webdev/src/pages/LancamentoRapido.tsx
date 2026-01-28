@@ -1,416 +1,361 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
-import Button from '@mui/material/Button'
-import Select from '@mui/material/Select'
-import MenuItem from '@mui/material/MenuItem'
-import Typography from '@mui/material/Typography'
-import IconButton from '@mui/material/IconButton'
-import Accordion from '@mui/material/Accordion'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import EditIcon from '@mui/icons-material/Edit'
-import DeleteIcon from '@mui/icons-material/Delete'
-import CheckIcon from '@mui/icons-material/Check'
-import Alert from '@mui/material/Alert'
+import { Edit, Save, Comment } from "@mui/icons-material";
+import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, TextField, Typography, Badge } from "@mui/material";
+import { useEffect, useState, useReducer } from "react";
 
-const TURNOS = ['06:00 - 14:00', '14:00 - 22:00', '22:00 - 06:00'] as const
-const PRODUTOS = ['Orange', 'Lime', 'Lemon', 'Tangerine'] as const
+type Horimetro = { 
+    id: string; 
+    extrator_id: string; 
+    data: string; 
+    turno: string; 
+    valor: number; 
+    observacoes?: string | null; 
+    created_at: string 
+};
 
-function todayDateStr(): string {
-  return new Date().toISOString().split('T')[0]
-}
+type HorimetroState = {
+    horimetros: Horimetro[];
+    editing: Record<string, boolean>;
+    tempValor: Record<string, string>;
+    tempObs: Record<string, string>;
+    obsVisible: Record<string, boolean>;
+};
 
-type Horimetro = {
-  id: string
-  extrator_id: string
-  data: string
-  turno: string
-  valor: number
-}
+type HorimetroAction =
+    | { type: 'SET_HORIMETROS'; payload: Horimetro[] }
+    | { type: 'ENABLE_EDIT'; key: string }
+    | { type: 'DISABLE_EDIT'; key: string }
+    | { type: 'SET_TEMP_VALOR'; key: string; value: string }
+    | { type: 'CLEAR_TEMP_VALOR'; key: string }
+    | { type: 'SET_TEMP_OBS'; key: string; value: string }
+    | { type: 'CLEAR_TEMP_OBS'; key: string }
+    | { type: 'TOGGLE_OBS_VISIBLE'; key: string };
 
-type Feedback = {
-  id: string
-  extrator_id: string
-  data: string
-  turno: string
-  produto: string
-  tamanho_da_fruta: number
-  caixas_processadas: number
+const initialState: HorimetroState = {
+    horimetros: [],
+    editing: {},
+    tempValor: {},
+    tempObs: {},
+    obsVisible: {}
+};
+
+function horimetroReducer(state: HorimetroState, action: HorimetroAction): HorimetroState {
+    switch (action.type) {
+        case 'SET_HORIMETROS':
+            return { ...state, horimetros: action.payload };
+        
+        case 'ENABLE_EDIT':
+            return { ...state, editing: { ...state.editing, [action.key]: true } };
+        
+        case 'DISABLE_EDIT':
+            return { ...state, editing: { ...state.editing, [action.key]: false } };
+        
+        case 'SET_TEMP_VALOR':
+            return { ...state, tempValor: { ...state.tempValor, [action.key]: action.value } };
+        
+        case 'CLEAR_TEMP_VALOR': {
+            const { [action.key]: _, ...rest } = state.tempValor;
+            return { ...state, tempValor: rest };
+        }
+        
+        case 'SET_TEMP_OBS':
+            return { ...state, tempObs: { ...state.tempObs, [action.key]: action.value } };
+        
+        case 'CLEAR_TEMP_OBS':
+            return { ...state, tempObs: { ...state.tempObs, [action.key]: '' } };
+        
+        case 'TOGGLE_OBS_VISIBLE':
+            return { ...state, obsVisible: { ...state.obsVisible, [action.key]: !state.obsVisible[action.key] } };
+        
+        default:
+            return state;
+    }
 }
 
 export default function LancamentoRapido() {
-  const [extratores, setExtratores] = useState<Extrator[]>([])
-  const [date, setDate] = useState<string>(todayDateStr())
-  const [horimetros, setHorimetros] = useState<Horimetro[]>([])
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
-  const [expanded, setExpanded] = useState<string | false>(false)
-  const [prodExpanded, setProdExpanded] = useState<boolean>(false)
-  const [loading, setLoading] = useState<boolean>(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+    const TURNOS = ["06:00 - 14:00", "14:00 - 22:00", "22:00 - 06:00"];
 
-  // helpers to call eel without using `any`
-  function eelListExtratores() {
-    return window.eel.list_extratores()()
-  }
-  function eelListHorimetros(d: string) {
-    // window.eel.list_horimetros(data?, extrator_id?) is exposed from backend
-    return (window as unknown as { eel: { list_horimetros: EelCall<Horimetro[]> } }).eel.list_horimetros(d)()
-  }
-  function eelListFeedbacks(d: string) {
-    return window.eel.list_feedbacks(d)()
-  }
-  function eelUpsertHorimetro(payload: { extrator_id: string; data: string; turno: string; valor: number }) {
-    return window.eel.upsert_horimetro(payload)()
-  }
-  function eelCreateFeedback(payload: { extrator_id: string; data: string; turno: string; produto: string; tamanho_da_fruta: number; caixas_processadas: number }) {
-    return window.eel.create_feedback(payload)()
-  }
-  function eelUpdateFeedback(id: string, data: { produto?: string; tamanho_da_fruta?: number; caixas_processadas?: number; turno?: string }) {
-    return window.eel.update_feedback(id, data)()
-  }
-  function eelDeleteFeedback(id: string) {
-    return window.eel.delete_feedback(id)()
-  }
-  function eelProcessarDia(extratorId: string, d: string) {
-    return window.eel.processar_dia(extratorId, d)()
-  }
+    const [date, setDate] = useState(new Date());
+    const [extratores, setExtratores] = useState<Extrator[]>([]);
+    const [state, dispatch] = useReducer(horimetroReducer, initialState);
 
-  // aggregation/mapping
-  const horimetrosByExtrator = useMemo(() => {
-    const map = new Map<string, Horimetro[]>()
-    for (const h of horimetros) {
-      const list = map.get(h.extrator_id) ?? []
-      list.push(h)
-      map.set(h.extrator_id, list)
-    }
-    return map
-  }, [horimetros])
+    const getFieldKey = (extratorId: string, turno: string) => `${extratorId}-${turno}`;
 
-  const feedbacksByProduto = useMemo(() => {
-    const map = new Map<string, Feedback[]>()
-    for (const f of feedbacks) {
-      const list = map.get(f.produto) ?? []
-      list.push(f)
-      map.set(f.produto, list)
-    }
-    return map
-  }, [feedbacks])
+    const handleEdit = (extratorId: string, turno: string) => {
+        const key = getFieldKey(extratorId, turno);
+        dispatch({ type: 'ENABLE_EDIT', key });
+    };
 
-  // states for inputs and editing
-  const [inputs, setInputs] = useState<Record<string, Record<string, string>>>({})
-  const [productInputs, setProductInputs] = useState<Record<string, { tamanho: string; caixas: string }>>({})
-  const [editingTurnos, setEditingTurnos] = useState<Record<string, boolean>>({})
-  const [editingProducts, setEditingProducts] = useState<Record<string, boolean>>({})
-
-  function isError(obj: unknown): obj is { error: string } {
-    const o = obj as Record<string, unknown>
-    return typeof o === 'object' && o !== null && typeof o['error'] === 'string'
-  }
-
-  // Fetch functions (defined before useEffect)
-  async function fetchAll() {
-    setLoading(true)
-    try {
-      const extrRes = await eelListExtratores()
-      if (isError(extrRes)) {
-        setMessage({ type: 'error', text: extrRes.error })
-        return
-      }
-      const extrs = extrRes as Extrator[]
-      setExtratores(extrs)
-
-      const hRes = await eelListHorimetros(date)
-      if (isError(hRes)) {
-        setMessage({ type: 'error', text: hRes.error })
-        return
-      }
-      const hs = hRes as Horimetro[]
-      setHorimetros(hs)
-
-      const fRes = await eelListFeedbacks(date)
-      if (isError(fRes)) {
-        setMessage({ type: 'error', text: fRes.error })
-        return
-      }
-      const fs = fRes as Feedback[]
-      setFeedbacks(fs)
-
-      // initialize inputs based on fetched data
-      const newInputs: Record<string, Record<string, string>> = {}
-      for (const ex of extrs) {
-        const list = hs.filter(h => h.extrator_id === ex.id)
-        const byTurno: Record<string, string> = {}
-        for (const t of TURNOS) {
-          const item = list.find(l => l.turno === t)
-          byTurno[t] = item ? String(item.valor) : ''
+    const handleSave = async (extratorId: string, turno: string) => {
+        const key = getFieldKey(extratorId, turno);
+        const dateString = date.toISOString().substring(0, 10);
+        const rawValue = state.tempValor[key];
+        const observacoes = state.tempObs[key] || null;
+        
+        // Verifica se há algo para salvar
+        const horimetroExistente = findHorimetro(extratorId, turno);
+        if (!rawValue && !observacoes && !horimetroExistente) {
+            alert('Preencha o valor do horímetro ou adicione observações');
+            return;
         }
-        newInputs[ex.id] = byTurno
-      }
-      setInputs(newInputs)
 
-      const newProdInputs: Record<string, { tamanho: string; caixas: string }> = {}
-      for (const p of PRODUTOS) {
-        const list = fs.filter(f => f.produto === p)
-        newProdInputs[p] = list.length > 0 ? { tamanho: String(list[0].tamanho_da_fruta), caixas: String(list[0].caixas_processadas) } : { tamanho: '', caixas: '' }
-      }
-      setProductInputs(newProdInputs)
+        // Prepara payload - só envia o que mudou
+        const payload: any = {
+            extrator_id: extratorId, 
+            data: dateString, 
+            turno
+        };
 
-    } finally {
-      setLoading(false)
-    }
-  }
+        // Adiciona valor se foi preenchido/modificado
+        if (rawValue && rawValue !== '') {
+            const valor = parseFloat(rawValue);
+            if (isNaN(valor)) {
+                alert('Valor deve ser um número válido');
+                return;
+            }
+            payload.valor = valor;
+        }
 
-  async function handleLancamentoHorimetro(extratorId: string, turno: string, valor: number) {
-    setLoading(true)
-    try {
-      const res = await eelUpsertHorimetro({ extrator_id: extratorId, data: date, turno, valor })
-      if (isError(res)) {
-        setMessage({ type: 'error', text: res.error })
-        return
-      }
-      setMessage({ type: 'success', text: `Horímetro lançado (${turno})` })
-      // after successful lancamento, stop editing
-      const key = `${extratorId}|${turno}`
-      setEditingTurnos(prev => ({ ...prev, [key]: false }))
-      await refreshHorimetros()
-      await refreshInputsForExtrator(extratorId)
-    } finally {
-      setLoading(false)
-    }
-  }
+        // Adiciona observações se foram preenchidas
+        if (observacoes !== null && observacoes !== undefined) {
+            payload.observacoes = observacoes;
+        }
+        
+        try {
+            const res = await window.eel.upsert_horimetro(payload)();
+            
+            if (res && 'error' in res) {
+                alert(`Erro: ${res.error}`);
+                return;
+            }
 
-  async function handleCreateFeedback(extratorId: string, produto: string, tamanho: number, caixas: number) {
-    setLoading(true)
-    try {
-      const res = await eelCreateFeedback({ extrator_id: extratorId, data: date, turno: TURNOS[0], produto, tamanho_da_fruta: tamanho, caixas_processadas: caixas })
-      if (isError(res)) {
-        setMessage({ type: 'error', text: res.error })
-        return
-      }
-      setMessage({ type: 'success', text: `Feedback lançado (${produto})` })
-      await refreshFeedbacks()
-      setProductInputs(prev => ({ ...prev, [produto]: { tamanho: String(tamanho), caixas: String(caixas) } }))
-    } finally {
-      setLoading(false)
-    }
-  }
+            // Reload from DB
+            await loadHorimetros();
 
-  async function handleDeleteFeedback(id: string) {
-    setLoading(true)
-    try {
-      const res = await eelDeleteFeedback(id)
-      if (isError(res)) {
-        setMessage({ type: 'error', text: res.error })
-        return
-      }
-      setMessage({ type: 'success', text: 'Feedback removido' })
-      await refreshFeedbacks()
-    } finally {
-      setLoading(false)
-    }
-  }
+            // Clear editing state
+            dispatch({ type: 'DISABLE_EDIT', key });
+            dispatch({ type: 'CLEAR_TEMP_VALOR', key });
+            dispatch({ type: 'CLEAR_TEMP_OBS', key });
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao salvar horímetro');
+        }
+    };
 
-  async function refreshHorimetros() {
-    const hRes = await eelListHorimetros(date)
-    if (!isError(hRes)) setHorimetros(hRes as Horimetro[])
-  }
+    const loadHorimetros = async () => {
+        const dateString = date.toISOString().substring(0, 10);
+        try {
+            if (typeof window === 'undefined' || !window.eel || typeof window.eel.list_horimetros_by_date !== 'function') {
+                console.error('Eel bridge unavailable (window.eel.list_horimetros_by_date missing)');
+                return;
+            }
+            console.debug('loadHorimetros dateString=', dateString);
+            const result = await window.eel.list_horimetros_by_date(dateString)();
+            console.debug('loadHorimetros result raw=', result);
+            if (Array.isArray(result)) {
+                dispatch({ type: 'SET_HORIMETROS', payload: result as Horimetro[] });
+            } else if (result && 'error' in result) {
+                console.error('Failed to fetch horimetros:', result.error);
+            } else {
+                console.warn('loadHorimetros: unexpected result', result);
+            }
+        } catch (err) {
+            console.error('Failed to load horimetros', err);
+        }
+    };
 
-  async function refreshFeedbacks() {
-    const fRes = await eelListFeedbacks(date)
-    if (!isError(fRes)) setFeedbacks(fRes as Feedback[])
-  }
+    const findHorimetro = (extratorId: string, turno: string): Horimetro | undefined => {
+        const dateString = date.toISOString().substring(0, 10);
+        return state.horimetros.find(h => 
+            h.extrator_id === extratorId && 
+            h.turno === turno && 
+            h.data === dateString
+        );
+    };
 
-  async function refreshInputsForExtrator(extratorId: string) {
-    const hRes = await eelListHorimetros(date)
-    if (isError(hRes)) return
-    const hs = hRes as Horimetro[]
-    setInputs(prev => ({ ...prev, [extratorId]: TURNOS.reduce((acc, t) => { const it = hs.find(h=>h.extrator_id===extratorId && h.turno===t); acc[t]=it?String(it.valor):''; return acc }, {} as Record<string,string>) }))
-  }
+    const getValorDisplay = (extratorId: string, turno: string): string => {
+        const key = getFieldKey(extratorId, turno);
+        
+        // Show temp value if editing
+        if (state.tempValor[key]) {
+            return state.tempValor[key];
+        }
+        
+        // Otherwise show DB value
+        const horimetro = findHorimetro(extratorId, turno);
+        return horimetro?.valor?.toString() ?? '';
+    };
 
-  async function handleProcessarDia(extratorId: string) {
-    setLoading(true)
-    try {
-      const res = await eelProcessarDia(extratorId, date)
-      if (isError(res)) {
-        setMessage({ type: 'error', text: res.error })
-        return
-      }
-      const result = res as ProcessoResult
-      setMessage({ type: 'success', text: `Processado: ${result.horas_trabalhadas}h (${result.percentual}%)` })
-    } finally {
-      setLoading(false)
-    }
-  }
+    const getObsDisplay = (extratorId: string, turno: string): string => {
+        const key = getFieldKey(extratorId, turno);
+        
+        // Show temp value if typing
+        if (state.tempObs[key]) {
+            return state.tempObs[key];
+        }
+        
+        // Otherwise show DB value
+        const horimetro = findHorimetro(extratorId, turno);
+        return horimetro?.observacoes ?? '';
+    };
 
-  // Effects
-  useEffect(() => {
-    fetchAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date])
+    const isDisabled = (extratorId: string, turno: string): boolean => {
+        const key = getFieldKey(extratorId, turno);
+        const horimetro = findHorimetro(extratorId, turno);
+        
+        // Disabled if saved and not editing
+        return !!horimetro && !state.editing[key];
+    };
 
-  // helpers for UI
-  function countTurnosLancadosForExtrator(extratorId: string): number {
-    const list = horimetrosByExtrator.get(extratorId) ?? []
-    const turnos = new Set(list.map(h => h.turno))
-    return turnos.size
-  }
+    const handleValorChange = (extratorId: string, turno: string, value: string) => {
+        const key = getFieldKey(extratorId, turno);
+        dispatch({ type: 'SET_TEMP_VALOR', key, value });
+        
+        // Auto-enable editing for new entries
+        if (!findHorimetro(extratorId, turno)) {
+            dispatch({ type: 'ENABLE_EDIT', key });
+        }
+    };
 
-  function hasFullExtrator(extratorId: string): boolean {
-    return countTurnosLancadosForExtrator(extratorId) === 3
-  }
+    const handleObsChange = (extratorId: string, turno: string, value: string) => {
+        const key = getFieldKey(extratorId, turno);
+        dispatch({ type: 'SET_TEMP_OBS', key, value });
+    };
 
-  function canEnableFinalize(): boolean {
-    // Opção A: pelo menos 1 extrator com os 3 turnos e pelo menos 1 feedback no dia
-    const anyFull = extratores.some(e => hasFullExtrator(e.id))
-    return anyFull && feedbacks.length > 0
-  }
+    const toggleObs = (extratorId: string, turno: string) => {
+        const key = getFieldKey(extratorId, turno);
+        dispatch({ type: 'TOGGLE_OBS_VISIBLE', key });
+    };
 
-  return (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h6" gutterBottom>
-        Lançamento Diário Rápido
-      </Typography>
+    useEffect(() => {
+        // Load extratores
+        window.eel.list_extratores()().then((res) => {
+            if (Array.isArray(res)) {
+                setExtratores(res as Extrator[]);
+            } else if (res && 'error' in res) {
+                console.error('Failed to fetch extratores:', res.error);
+            }
+        });
 
-      {message && <Alert severity={message.type} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
+        // Load horimetros for current date
+        const dateString = date.toISOString().substring(0, 10);
+        console.log('CARREGANDO HORIMETROS PARA DATA:', dateString);
+        
+        if (!window.eel || typeof window.eel.list_horimetros_by_date !== 'function') {
+            console.error('Eel bridge unavailable');
+            return;
+        }
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-        <Select sx={{ minWidth: 220 }} value={date} onChange={e => setDate(e.target.value)}>
-          <MenuItem value={date}>{date}</MenuItem>
-        </Select>
-      </Stack>
+        window.eel.list_horimetros_by_date(dateString)().then((result) => {
+            console.log('RESULTADO DO BANCO:', result);
+            if (Array.isArray(result)) {
+                console.log('DESPACHANDO', result.length, 'HORIMETROS PARA O STATE');
+                dispatch({ type: 'SET_HORIMETROS', payload: result as Horimetro[] });
+            } else {
+                console.error('Resultado não é array:', result);
+            }
+        }).catch((err) => {
+            console.error('ERRO AO CARREGAR:', err);
+        });
+    }, [date]);
 
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="subtitle1">Extratores ({extratores.length})</Typography>
-        <Stack spacing={1} sx={{ mt: 1 }}>
-          {extratores.map(ex => {
-            const turnosL = horimetrosByExtrator.get(ex.id) ?? []
-            const launchedCount = new Set(turnosL.map(h => h.turno)).size
-            return (
-              <Accordion key={ex.id} expanded={expanded === ex.id} onChange={(_, isExpanded) => setExpanded(isExpanded ? ex.id : false)}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-                    <Typography>{`#${ex.numero} - ${ex.modelo}`}</Typography>
-                    <Typography variant="caption">{`${launchedCount}/3 turnos lançados`}</Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Stack spacing={2}>
-                    {TURNOS.map((turno) => {
-                      const existing = turnosL.find(t => t.turno === turno)
-                      const key = `${ex.id}|${turno}`
-                      const inputVal = inputs[ex.id]?.[turno] ?? ''
-                      const isEditing = !!editingTurnos[key]
 
-                      return (
-                        <Box key={turno} sx={{ border: '1px solid #eee', p: 2, borderRadius: 1 }}>
-                          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                            <Box sx={{ flex: 1 }}>
-                              <Typography variant="subtitle2">{turno}</Typography>
-                              <TextField value={inputVal} onChange={(e) => setInputs(prev => ({ ...prev, [ex.id]: { ...(prev[ex.id] ?? {}), [turno]: e.target.value } }))} type="number" size="small" sx={{ mt: 1 }} fullWidth />
-                            </Box>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <Button variant="contained" disabled={(!isEditing && !!existing) || loading} onClick={() => handleLancamentoHorimetro(ex.id, turno, parseFloat(inputVal || '0'))}>Lançar</Button>
-                              <IconButton onClick={() => setEditingTurnos(prev => ({ ...prev, [key]: true }))} title={existing ? 'Editar (habilita lançamento)' : 'Editar'}>
-                                <EditIcon />
-                              </IconButton>
-                              {existing && <CheckIcon color="success" />}
-                            </Box>
-                          </Box>
-                        </Box>
-                      )
-                    })}
 
-                    <Box>
-                      <Button variant="outlined" size="small" onClick={() => handleProcessarDia(ex.id)} disabled={!hasFullExtrator(ex.id) || loading}>Processar este extrator</Button>
-                    </Box>
-                  </Stack>
-                </AccordionDetails>
-              </Accordion>
-            )
-          })}
-        </Stack>
-      </Box>
 
-      <Box sx={{ mb: 2 }}>
-        <Accordion expanded={prodExpanded} onChange={(_, isExpanded) => setProdExpanded(isExpanded)}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Feedbacks de Produção ({feedbacks.length})</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              {PRODUTOS.map(prod => {
-                const existing = feedbacksByProduto.get(prod) ?? []
-                const launched = existing.length > 0
-                const ownerId = launched ? existing[0].extrator_id : (extratores[0]?.id ?? '')
-                const val = productInputs[prod] ?? ''
-                const isEditingProd = !!editingProducts[prod]
 
-                return (
-                  <Box key={prod} sx={{ border: '1px solid #eee', p: 2, borderRadius: 1 }}>
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="subtitle2">{prod}</Typography>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                          <TextField type="number" label="Tamanho (mm)" value={productInputs[prod]?.tamanho ?? ''} onChange={(e) => setProductInputs(prev => ({ ...prev, [prod]: { ...(prev[prod] ?? { tamanho: '', caixas: '' }), tamanho: e.target.value } }))} size="small" sx={{ minWidth: 120 }} />
-                          <TextField type="number" label="Caixas" value={productInputs[prod]?.caixas ?? ''} onChange={(e) => setProductInputs(prev => ({ ...prev, [prod]: { ...(prev[prod] ?? { tamanho: '', caixas: '' }), caixas: e.target.value } }))} size="small" sx={{ minWidth: 120 }} />
-                        </Stack>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button variant="contained" disabled={(launched && !isEditingProd) || loading || !ownerId} onClick={() => {
-                          if (launched && isEditingProd) {
-                            // update existing
-                            const fb = existing[0]
-                            const tamanho = parseInt(productInputs[prod]?.tamanho || '0')
-                            const caixas = parseInt(productInputs[prod]?.caixas || '0')
-                            setLoading(true)
-                            eelUpdateFeedback(fb.id, { tamanho_da_fruta: tamanho, caixas_processadas: caixas })
-                              .then(res => {
-                                if (isError(res)) setMessage({ type: 'error', text: res.error })
-                                else { setMessage({ type: 'success', text: 'Feedback atualizado' }); refreshFeedbacks() }
-                              })
-                              .finally(() => setLoading(false))
-                          } else {
-                            const tamanho = parseInt(productInputs[prod]?.tamanho || '0')
-                            const caixas = parseInt(productInputs[prod]?.caixas || '0')
-                            handleCreateFeedback(ownerId, prod, tamanho, caixas)
 
-                        <IconButton onClick={() => {
-                          if (launched) setEditingProducts(prev => ({ ...prev, [prod]: true }))
-                          else setProductInputs(prev => ({ ...prev, [prod]: '' }))
-                        }} title={launched ? 'Editar (habilita lançamento)' : 'Editar'}>
-                          <EditIcon />
-                        </IconButton>
 
-                        {launched && (
-                          <>
-                            <IconButton onClick={() => handleDeleteFeedback(existing[0].id)} title="Remover"><DeleteIcon /></IconButton>
-                            <CheckIcon color="success" />
-                          </>
-                        )}
-                      </Box>
-                    </Box>
-                  </Box>
-                )
-              })}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      </Box>
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, padding: 2, justifyContent: 'center' }}>
+            <Box id="title" sx={{ fontSize: 24, fontWeight: 'bold', textAlign: 'center' }}>
+                <Typography variant="h4">Lançamentos</Typography>
+            </Box>
+            <Box>
+                <Input type="date" value={date.toISOString().substring(0, 10)} onChange={(e) => setDate(new Date(e.target.value))} />
+            </Box>
 
-      <Box sx={{ mt: 3 }}>
-        <Button variant="contained" color="success" disabled={!canEnableFinalize() || loading} onClick={() => {
-          // finalize: escolher primeiro extrator com 3 turnos
-          const extr = extratores.find(e => hasFullExtrator(e.id))
-          if (extr) handleProcessarDia(extr.id)
-        }}>Finalizar Dia</Button>
-      </Box>
+            <div>{JSON.stringify(state.horimetros)}</div>
+            <div>{JSON.stringify(extratores)}</div>
+            <Box sx={{ width: '40%', alignSelf: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
+                    {extratores.map((extrator) => (
+                        <Accordion key={extrator.id} sx={{ width: '100%' }}>
+                            <AccordionSummary>
+                                <Typography>Extrator {extrator.numero} - {extrator.modelo}</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                    {TURNOS.map((turno) => {
+                                        const key = getFieldKey(extrator.id, turno);
+                                        const horimetro = findHorimetro(extrator.id, turno);
+                                        const disabled = isDisabled(extrator.id, turno);
+                                        const hasObs = !!horimetro?.observacoes;
+                                        const needsValor = horimetro?.valor === 0 && hasObs;
+                                        
+                                        return (
+                                            <Box key={turno} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
+                                                    <TextField
+                                                        label={turno}
+                                                        variant="outlined"
+                                                        type="number"
+                                                        size="small"
+                                                        disabled={disabled}
+                                                        value={getValorDisplay(extrator.id, turno)}
+                                                        onChange={(e) => handleValorChange(extrator.id, turno, e.target.value)}
+                                                        inputProps={{ inputMode: 'numeric', step: 0.01, min: 0 }}
+                                                        sx={{ flex: 1 }}
+                                                        helperText={needsValor ? 'Valor pendente - preencher' : ''}
+                                                        error={needsValor}
+                                                    />
 
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="caption">Observação: o dia padrão é hoje, mas pode ser ajustado para lançamentos retroativos.</Typography>
-      </Box>
-    </Box>
-  )
+                                                    <IconButton 
+                                                        onClick={() => handleSave(extrator.id, turno)}
+                                                        disabled={disabled}
+                                                        color="primary"
+                                                    >
+                                                        <Save />
+                                                    </IconButton>
+                                                    
+                                                    <IconButton 
+                                                        onClick={() => handleEdit(extrator.id, turno)}
+                                                        disabled={!disabled}
+                                                        color="secondary"
+                                                    >
+                                                        <Edit />
+                                                    </IconButton>
+
+                                                    <IconButton onClick={() => toggleObs(extrator.id, turno)} color="inherit">
+                                                        <Badge color="warning" variant={hasObs ? 'dot' : 'standard'}>
+                                                            <Comment />
+                                                        </Badge>
+                                                    </IconButton>
+                                                </Box>
+                                                
+                                                {state.obsVisible[key] && (
+                                                    <TextField
+                                                        label="Observações"
+                                                        variant="outlined"
+                                                        size="small"
+                                                        multiline
+                                                        minRows={2}
+                                                        disabled={disabled}
+                                                        value={getObsDisplay(extrator.id, turno)}
+                                                        onChange={(e) => handleObsChange(extrator.id, turno, e.target.value)}
+                                                        fullWidth
+                                                    />
+                                                )}
+                                            </Box>
+                                        );
+                                    })}
+                                </Box>
+                            </AccordionDetails>
+
+                        </Accordion>
+                    ))}
+                </Box>
+            </Box>
+
+            
+        </Box >
+    )
 }

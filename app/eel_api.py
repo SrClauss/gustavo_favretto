@@ -229,3 +229,8 @@ def delete_local(local_id):
     if status >= 400:
         return {"error": resultado.get("error")}
     return resultado
+
+@eel.expose
+def list_horimetros_by_date(dia):
+    """Retorna horímetros de uma data específica"""
+    return api_horimetro.list_horimetros_by_date(dia)
