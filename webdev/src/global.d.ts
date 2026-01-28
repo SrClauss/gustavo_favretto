@@ -121,6 +121,8 @@ declare global {
     create_local: EelCall<LocalParada>
     update_local: EelCall<LocalParada>
     delete_local: EelCall<{ message: string }>
+
+    get_nominal_constant: EelCall<number>
   }
 
   interface Window {

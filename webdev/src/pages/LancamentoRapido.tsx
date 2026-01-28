@@ -3,7 +3,6 @@ import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, 
 import { useEffect, useState, useReducer } from "react";
 
 const produtos = ['Orange', 'Lime', 'Lemon', 'Tangerine'];
-const NOMINAL_CONSTANT = 110.909090909091 * 5 * 60 * 11 * 24;
 
 type Horimetro = { 
     id: string; 
@@ -123,8 +122,26 @@ export default function LancamentoRapido() {
         extratores_parados: [] as string[]
     });
 
-    const [tempTamanho, setTempTamanho] = useState<Record<string, string>>({});
-    const [tempCaixas, setTempCaixas] = useState<Record<string, string>>({});
+    const [tempTamanho, setTempTamanho] = useState<Record<string, number>>({});
+    const [tempCaixas, setTempCaixas] = useState<Record<string, number>>({});
+
+    const [nominalConstant, setNominalConstant] = useState<number>(8784000);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                if (!window.eel || typeof window.eel.get_nominal_constant !== 'function') return;
+                const result = await window.eel.get_nominal_constant()();
+                if (typeof result === 'number') {
+                    setNominalConstant(result);
+                } else {
+                    console.error('Erro ao carregar constante:', result.error);
+                }
+            } catch (err) {
+                console.error('Erro ao carregar constante nominal', err);
+            }
+        })();
+    }, []);
 
     useEffect(() => {
         const dateString = date.toISOString().substring(0, 10);
@@ -149,11 +166,11 @@ export default function LancamentoRapido() {
                     if (Array.isArray(res)) {
                         setFeedbacks(res as unknown as FeedBackProducao[]);
                         // Inicializar temp states
-                        const newTempTamanho: Record<string, string> = {};
-                        const newTempCaixas: Record<string, string> = {};
+                        const newTempTamanho: Record<string, number> = {};
+                        const newTempCaixas: Record<string, number> = {};
                         (res as unknown as FeedBackProducao[]).forEach(f => {
-                            newTempTamanho[f.produto] = f.tamanho_da_fruta.toString();
-                            newTempCaixas[f.produto] = f.caixas_processadas.toString();
+                            newTempTamanho[f.produto] = f.tamanho_da_fruta;
+                            newTempCaixas[f.produto] = f.caixas_processadas;
                         });
                         setTempTamanho(newTempTamanho);
                         setTempCaixas(newTempCaixas);
@@ -350,8 +367,8 @@ export default function LancamentoRapido() {
 
     const handleSalvarFeedback = async (produto: string) => {
         const dateString = date.toISOString().substring(0, 10);
-        const tamanho = parseFloat(tempTamanho[produto] || "0") || 0;
-        const caixas = parseInt(tempCaixas[produto] || "0") || 0;
+        const tamanho = tempTamanho[produto] || 0;
+        const caixas = tempCaixas[produto] || 0;
 
         if (tamanho <= 0 || caixas <= 0) {
             alert('Preencha tamanho da fruta e caixas processadas válidos');
@@ -376,11 +393,11 @@ export default function LancamentoRapido() {
             if (Array.isArray(resReload)) {
                 setFeedbacks(resReload as unknown as FeedBackProducao[]);
                 // Re-inicializar temp
-                const newTempTamanho: Record<string, string> = {};
-                const newTempCaixas: Record<string, string> = {};
+                const newTempTamanho: Record<string, number> = {};
+                const newTempCaixas: Record<string, number> = {};
                 (resReload as unknown as FeedBackProducao[]).forEach(f => {
-                    newTempTamanho[f.produto] = f.tamanho_da_fruta.toString();
-                    newTempCaixas[f.produto] = f.caixas_processadas.toString();
+                    newTempTamanho[f.produto] = f.tamanho_da_fruta;
+                    newTempCaixas[f.produto] = f.caixas_processadas;
                 });
                 setTempTamanho(newTempTamanho);
                 setTempCaixas(newTempCaixas);
@@ -469,18 +486,15 @@ export default function LancamentoRapido() {
             {tabIndex === 0 && (
                 <>
                     <Box sx={{ width: '40%', alignSelf: 'center' }}>
-                        {extratores.length === 0 ? (
-                            <Typography>Não há extratores cadastrados</Typography>
-                        ) : (
-                            <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                                {extratores.map((extrator) => (
-                                    <Accordion key={extrator.id} sx={{ width: '100%' }}>
-                                        <AccordionSummary>
-                                            <Typography>Extrator {extrator.numero} - {extrator.modelo}</Typography>
-                                        </AccordionSummary>
-                                        <AccordionDetails>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                {TURNOS.map((turno) => {
+                        <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
+                            {extratores.map((extrator) => (
+                                <Accordion key={extrator.id} sx={{ width: '100%' }}>
+                                    <AccordionSummary>
+                                        <Typography>Extrator {extrator.numero} - {extrator.modelo}</Typography>
+                                    </AccordionSummary>
+                                    <AccordionDetails>
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            {TURNOS.map((turno) => {
                                                 const key = getFieldKey(extrator.id, turno);
                                                 const horimetro = findHorimetro(extrator.id, turno);
                                                 const disabled = isDisabled(extrator.id, turno);
@@ -549,7 +563,6 @@ export default function LancamentoRapido() {
                                 </Accordion>
                             ))}
                         </Box>
-                        )}
                     </Box>
                 </>
             )}
@@ -666,55 +679,47 @@ export default function LancamentoRapido() {
                 <Box sx={{ width: '80%', alignSelf: 'center' }}>
                     <Typography variant="h6">Feedback Produção para {date.toISOString().substring(0,10)}</Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {(() => {
-                            const totalCaixas = produtos.reduce((sum, p) => sum + (parseInt(tempCaixas[p] || "0") || 0), 0);
-                            return produtos.map((produto) => {
-                                const feedback = feedbacks.find(f => f.produto === produto);
-                                const tamanhoStr = tempTamanho[produto] ?? feedback?.tamanho_da_fruta.toString() ?? "";
-                                const caixasStr = tempCaixas[produto] ?? feedback?.caixas_processadas.toString() ?? "";
-                                const tamanho = parseFloat(tamanhoStr || "0") || 0;
-                                const caixas = parseInt(caixasStr || "0") || 0;
-                                const nominal = tamanho > 0 && totalCaixas > 0 ? (NOMINAL_CONSTANT / tamanho) * (caixas / totalCaixas) : 0;
+                        {produtos.map((produto) => {
+                            const feedback = feedbacks.find(f => f.produto === produto);
+                            const tamanho = tempTamanho[produto] ?? feedback?.tamanho_da_fruta ?? 0;
+                            const caixas = tempCaixas[produto] ?? feedback?.caixas_processadas ?? 0;
 
-                                return (
-                                    <Box key={produto} sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', padding: 2, border: '1px solid #eee', borderRadius: 1 }}>
-                                        <Typography sx={{ minWidth: 100 }}>{produto}</Typography>
-                                        <TextField
-                                            label="Tamanho da Fruta"
-                                            type="number"
-                                            size="small"
-                                            value={tamanhoStr}
-                                            onChange={(e) => setTempTamanho(prev => ({ ...prev, [produto]: e.target.value }))}
-                                            inputProps={{ step: 0.01, min: 0 }}
-                                            sx={{ flex: 1 }}
-                                        />
-                                        <TextField
-                                            label="Caixas Processadas"
-                                            type="number"
-                                            size="small"
-                                            value={caixasStr}
-                                            onChange={(e) => setTempCaixas(prev => ({ ...prev, [produto]: e.target.value }))}
-                                            inputProps={{ min: 0 }}
-                                            sx={{ flex: 1 }}
-                                        />
-                                        <TextField
-                                            label="Nominal"
-                                            type="number"
-                                            size="small"
-                                            value={nominal.toFixed(2)}
-                                            InputProps={{ readOnly: true }}
-                                            sx={{ flex: 1 }}
-                                        />
-                                        <IconButton 
-                                            onClick={() => handleSalvarFeedback(produto)}
-                                            color="primary"
-                                        >
-                                            <Save />
-                                        </IconButton>
-                                    </Box>
-                                );
-                            });
-                        })()}
+                            return (
+                                <Box key={produto} sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', padding: 2, border: '1px solid #eee', borderRadius: 1 }}>
+                                    <Typography sx={{ minWidth: 100 }}>{produto}</Typography>
+                                    <TextField
+                                        label="Tamanho da Fruta"
+                                        type="number"
+                                        size="small"
+                                        value={tamanho}
+                                        onChange={(e) => setTempTamanho(prev => ({ ...prev, [produto]: parseFloat(e.target.value) || 0 }))}
+                                        inputProps={{ step: 0.01, min: 0 }}
+                                        sx={{ flex: 1 }}
+                                    />
+                                    <TextField
+                                        label="Caixas Processadas"
+                                        type="number"
+                                        size="small"
+                                        value={caixas}
+                                        onChange={(e) => setTempCaixas(prev => ({ ...prev, [produto]: parseInt(e.target.value) || 0 }))}
+                                        inputProps={{ min: 0 }}
+                                        sx={{ flex: 1 }}
+                                    />
+                                    <Typography variant="body2" sx={{ minWidth: 100 }}>
+                                        Nominal: {(() => {
+                                            const totalCaixas = Object.values(tempCaixas).reduce((sum, v) => sum + v, 0);
+                                            return tamanho > 0 && totalCaixas > 0 ? (((nominalConstant * 5 * 60 * 11 * 24) / tamanho) * (caixas / totalCaixas)).toFixed(2) : '0.00';
+                                        })()}
+                                    </Typography>
+                                    <IconButton 
+                                        onClick={() => handleSalvarFeedback(produto)}
+                                        color="primary"
+                                    >
+                                        <Save />
+                                    </IconButton>
+                                </Box>
+                            );
+                        })}
                     </Box>
                 </Box>
             )}
