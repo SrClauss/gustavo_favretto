@@ -42,7 +42,6 @@ class Parada(BaseModel):
     id: uuid.UUID    
     extrator_id: uuid.UUID
     data: str  # formato YYYY-MM-DD
-    turno: Turnos
     motivo: uuid.UUID
     duracao_minutos: int
     local_parada: uuid.UUID
@@ -92,9 +91,7 @@ class LocalParada(BaseModel):
 
 class FeedBackProducao(BaseModel):
     id: uuid.UUID
-    extrator_id: uuid.UUID
     data: str  # formato YYYY-MM-DD
-    turno: Turnos
     produto: Produto
     tamanho_da_fruta: int
     caixas_processadas: int

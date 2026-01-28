@@ -20,7 +20,6 @@ type Parada = {
     id: string;
     extrator_id: string;
     data: string;
-    turno: string;
     motivo: string;
     duracao_minutos: number;
     local_parada: string;
@@ -29,9 +28,7 @@ type Parada = {
 
 type Feedback = {
     id: string;
-    extrator_id: string;
     data: string;
-    turno: string;
     produto: string;
     tamanho_da_fruta: number;
     caixas_processadas: number;
@@ -110,7 +107,6 @@ export default function LancamentoRapido() {
     // Paradas state
     const [paradas, setParadas] = useState<Parada[]>([]);
     const [newParada, setNewParada] = useState({
-        turno: TURNOS[0],
         motivo: '',
         duracao_minutos: 0,
         local_parada: '',
@@ -120,8 +116,6 @@ export default function LancamentoRapido() {
     // Feedback state
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
     const [newFeedback, setNewFeedback] = useState({
-        turno: TURNOS[0],
-        extrator_id: '',
         produto: PRODUTOS[0],
         tamanho_da_fruta: 0,
         caixas_processadas: 0
@@ -304,7 +298,6 @@ export default function LancamentoRapido() {
         const paradasData = newParada.extratores_parados.map(extratorId => ({
             extrator_id: extratorId,
             data: dateString,
-            turno: newParada.turno,
             motivo: newParada.motivo,
             duracao_minutos: newParada.duracao_minutos,
             local_parada: newParada.local_parada,
@@ -320,7 +313,6 @@ export default function LancamentoRapido() {
 
             // Reset form
             setNewParada({
-                turno: TURNOS[0],
                 motivo: '',
                 duracao_minutos: 0,
                 local_parada: '',
@@ -356,7 +348,7 @@ export default function LancamentoRapido() {
     const handleCreateFeedback = async () => {
         const dateString = date.toISOString().substring(0, 10);
 
-        if (!newFeedback.extrator_id || !newFeedback.produto) {
+        if (!newFeedback.produto) {
             alert('Preencha todos os campos obrigatórios');
             return;
         }
@@ -367,9 +359,7 @@ export default function LancamentoRapido() {
         }
 
         const feedbackData = {
-            extrator_id: newFeedback.extrator_id,
             data: dateString,
-            turno: newFeedback.turno,
             produto: newFeedback.produto,
             tamanho_da_fruta: newFeedback.tamanho_da_fruta,
             caixas_processadas: newFeedback.caixas_processadas
@@ -384,8 +374,6 @@ export default function LancamentoRapido() {
 
             // Reset form
             setNewFeedback({
-                turno: TURNOS[0],
-                extrator_id: '',
                 produto: PRODUTOS[0],
                 tamanho_da_fruta: 0,
                 caixas_processadas: 0
@@ -557,19 +545,6 @@ export default function LancamentoRapido() {
                         <Typography variant="h6">Nova Parada</Typography>
 
                         <FormControl fullWidth size="small">
-                            <InputLabel>Turno</InputLabel>
-                            <Select
-                                value={newParada.turno}
-                                label="Turno"
-                                onChange={(e) => setNewParada({ ...newParada, turno: e.target.value })}
-                            >
-                                {TURNOS.map((turno) => (
-                                    <MenuItem key={turno} value={turno}>{turno}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        <FormControl fullWidth size="small">
                             <InputLabel>Motivo</InputLabel>
                             <Select
                                 value={newParada.motivo}
@@ -651,7 +626,6 @@ export default function LancamentoRapido() {
                             return (
                                 <Box key={parada.id} sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Box>
-                                        <Typography><strong>Turno:</strong> {parada.turno}</Typography>
                                         <Typography><strong>Motivo:</strong> {motivo?.descricao}</Typography>
                                         <Typography><strong>Duração:</strong> {parada.duracao_minutos} minutos</Typography>
                                         <Typography><strong>Local:</strong> {local?.descricao}</Typography>
@@ -672,34 +646,6 @@ export default function LancamentoRapido() {
                 <Box sx={{ width: '60%', alignSelf: 'center' }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3, p: 2, border: '1px solid #ddd', borderRadius: 1 }}>
                         <Typography variant="h6">Novo Feedback de Produção</Typography>
-
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Turno</InputLabel>
-                            <Select
-                                value={newFeedback.turno}
-                                label="Turno"
-                                onChange={(e) => setNewFeedback({ ...newFeedback, turno: e.target.value })}
-                            >
-                                {TURNOS.map((turno) => (
-                                    <MenuItem key={turno} value={turno}>{turno}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Extrator</InputLabel>
-                            <Select
-                                value={newFeedback.extrator_id}
-                                label="Extrator"
-                                onChange={(e) => setNewFeedback({ ...newFeedback, extrator_id: e.target.value })}
-                            >
-                                {extratores.map((extrator) => (
-                                    <MenuItem key={extrator.id} value={extrator.id}>
-                                        Extrator {extrator.numero} - {extrator.modelo}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
 
                         <FormControl fullWidth size="small">
                             <InputLabel>Produto</InputLabel>
@@ -746,13 +692,10 @@ export default function LancamentoRapido() {
                     <Typography variant="h6" sx={{ mb: 2 }}>Feedbacks do Dia</Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         {feedbacks.map((feedback) => {
-                            const extrator = extratores.find(e => e.id === feedback.extrator_id);
 
                             return (
                                 <Box key={feedback.id} sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Box>
-                                        <Typography><strong>Turno:</strong> {feedback.turno}</Typography>
-                                        <Typography><strong>Extrator:</strong> {extrator ? `${extrator.numero} - ${extrator.modelo}` : 'N/A'}</Typography>
                                         <Typography><strong>Produto:</strong> {feedback.produto}</Typography>
                                         <Typography><strong>Tamanho da Fruta:</strong> {feedback.tamanho_da_fruta}</Typography>
                                         <Typography><strong>Caixas Processadas:</strong> {feedback.caixas_processadas}</Typography>

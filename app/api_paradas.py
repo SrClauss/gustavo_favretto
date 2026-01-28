@@ -19,7 +19,6 @@ def batch_create_paradas(paradas_data: list):
                 id=str(uuid.uuid4()),
                 extrator_id=str(data["extrator_id"]),
                 data=data_obj,
-                turno=data["turno"],
                 motivo=str(data["motivo"]),
                 duracao_minutos=int(data["duracao_minutos"]),
                 local_parada=str(data["local_parada"]) if data.get("local_parada") else None,
@@ -46,7 +45,6 @@ def batch_create_paradas(paradas_data: list):
                 "id": parada.id,
                 "extrator_id": parada.extrator_id,
                 "data": parada.data.isoformat(),
-                "turno": parada.turno,
                 "motivo": parada.motivo,
                 "duracao_minutos": parada.duracao_minutos,
                 "local_parada": parada.local_parada,
@@ -76,7 +74,7 @@ def list_paradas(data_str: str = None, extrator_id: str = None):
         if extrator_id:
             query = query.filter(models_sqla.Parada.extrator_id == extrator_id)
         
-        paradas = query.order_by(models_sqla.Parada.data.desc(), models_sqla.Parada.turno).all()
+        paradas = query.order_by(models_sqla.Parada.data.desc()).all()
         
         result = []
         for p in paradas:
@@ -90,7 +88,6 @@ def list_paradas(data_str: str = None, extrator_id: str = None):
                 "id": p.id,
                 "extrator_id": p.extrator_id,
                 "data": p.data.isoformat(),
-                "turno": p.turno,
                 "motivo": p.motivo,
                 "duracao_minutos": p.duracao_minutos,
                 "local_parada": p.local_parada,
@@ -117,8 +114,6 @@ def update_parada(parada_id: str, data: dict):
             parada.duracao_minutos = int(data["duracao_minutos"])
         if "local_parada" in data:
             parada.local_parada = str(data["local_parada"])
-        if "turno" in data:
-            parada.turno = data["turno"]
         
         # Update extratores_parados if provided
         if "extratores_parados" in data:
@@ -148,7 +143,6 @@ def update_parada(parada_id: str, data: dict):
             "id": parada.id,
             "extrator_id": parada.extrator_id,
             "data": parada.data.isoformat(),
-            "turno": parada.turno,
             "motivo": parada.motivo,
             "duracao_minutos": parada.duracao_minutos,
             "local_parada": parada.local_parada,
@@ -192,9 +186,7 @@ def create_feedback(data: dict):
         
         feedback = models_sqla.FeedBackProducao(
             id=str(uuid.uuid4()),
-            extrator_id=str(data["extrator_id"]),
             data=data_obj,
-            turno=data["turno"],
             produto=data["produto"],
             tamanho_da_fruta=int(data.get("tamanho_da_fruta", 0)),
             caixas_processadas=int(data.get("caixas_processadas", 0))
@@ -204,9 +196,7 @@ def create_feedback(data: dict):
         
         return {
             "id": feedback.id,
-            "extrator_id": feedback.extrator_id,
             "data": feedback.data.isoformat(),
-            "turno": feedback.turno,
             "produto": feedback.produto,
             "tamanho_da_fruta": feedback.tamanho_da_fruta,
             "caixas_processadas": feedback.caixas_processadas
@@ -229,16 +219,11 @@ def list_feedbacks(data_str: str = None, extrator_id: str = None):
             data_obj = datetime.strptime(data_str, "%Y-%m-%d").date()
             query = query.filter(models_sqla.FeedBackProducao.data == data_obj)
         
-        if extrator_id:
-            query = query.filter(models_sqla.FeedBackProducao.extrator_id == extrator_id)
-        
-        feedbacks = query.order_by(models_sqla.FeedBackProducao.data.desc(), models_sqla.FeedBackProducao.turno).all()
+        feedbacks = query.order_by(models_sqla.FeedBackProducao.data.desc()).all()
         
         return [{
             "id": f.id,
-            "extrator_id": f.extrator_id,
             "data": f.data.isoformat(),
-            "turno": f.turno,
             "produto": f.produto,
             "tamanho_da_fruta": f.tamanho_da_fruta,
             "caixas_processadas": f.caixas_processadas
@@ -264,15 +249,11 @@ def update_feedback(feedback_id: str, data: dict):
             feedback.tamanho_da_fruta = int(data["tamanho_da_fruta"])
         if "caixas_processadas" in data:
             feedback.caixas_processadas = int(data["caixas_processadas"])
-        if "turno" in data:
-            feedback.turno = data["turno"]
         
         db.commit()
         return {
             "id": feedback.id,
-            "extrator_id": feedback.extrator_id,
             "data": feedback.data.isoformat(),
-            "turno": feedback.turno,
             "produto": feedback.produto,
             "tamanho_da_fruta": feedback.tamanho_da_fruta,
             "caixas_processadas": feedback.caixas_processadas

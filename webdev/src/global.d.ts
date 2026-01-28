@@ -28,9 +28,7 @@ declare global {
 
   interface Feedback {
     id: string
-    extrator_id: string
     data: string
-    turno: string
     produto: string
     tamanho_da_fruta: number
     caixas_processadas: number
@@ -58,7 +56,6 @@ declare global {
   }
 
   interface ParadaInput {
-    turno: string
     motivo: string
     local_parada: string
     duracao_minutos: number
@@ -84,7 +81,6 @@ declare global {
       id: string
       extrator_id: string
       data: string
-      turno: string
       motivo: string
       duracao_minutos: number
       local_parada: string
@@ -94,7 +90,6 @@ declare global {
       id: string
       extrator_id: string
       data: string
-      turno: string
       motivo: string
       duracao_minutos: number
       local_parada: string
