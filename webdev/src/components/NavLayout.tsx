@@ -14,9 +14,10 @@ import TabNav, { type NavItem } from './TabNav'
  * - `to`: rota
  */
 const NAVIGATION_ITEMS: NavItem[] = [
-  { label: 'Início', icon: 'Home', to: '/' },
-  { label: 'Lançamentos', icon: 'List', to: '/transactions' },
-  {label: 'Cadastros', icon: 'Settings', to: '/config' },
+  { label: 'Dashboard', icon: 'Dashboard', to: '/' },
+  { label: 'Lançamentos', icon: 'PlaylistAdd', to: '/transactions' },
+  { label: 'Relatórios', icon: 'Assessment', to: '/reports' },
+  { label: 'Cadastros', icon: 'Settings', to: '/config' },
 ]
 
 export default function NavLayout({ children }: { children?: React.ReactNode }) {

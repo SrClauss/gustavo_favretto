@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>webdev</title>
+    <script type="text/javascript" src="http://localhost:8000/eel.js"></script>
+    <script type="text/javascript">
+      // Em dev (Vite na 5173/5174), conecta ao servidor Eel na 8000
+      // Em produção, o Eel serve os arquivos e o eel.js localmente
+      try {
+        if (window.location.port === '5173' || window.location.port === '5174') {
+          if (typeof eel !== 'undefined' && eel.set_host) {
+            eel.set_host('http://localhost:8000');
+          } else {
+            // eel.js pode ainda não estar pronto — aguardar e tentar novamente
+            window.addEventListener('load', () => {
+              if (typeof eel !== 'undefined' && eel.set_host) eel.set_host('http://localhost:8000');
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao configurar eel host:', e);
+      }
+    </script>
+    <script type="module" crossorigin src="/assets/index-Dyh9h_yw.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CmxdhmaT.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

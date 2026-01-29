@@ -1,6 +1,13 @@
 import { Edit, Save, Comment, Add } from "@mui/icons-material";
-import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, TextField, Typography, Badge, Tabs, Tab, Button, Select, MenuItem, FormControl, InputLabel, Checkbox, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
+import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, TextField, Typography, Badge, Tabs, Tab, Button, Select, MenuItem, FormControl, InputLabel, Checkbox, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Card, CardContent, Divider } from "@mui/material";
 import { useEffect, useState, useReducer } from "react";
+
+const formatDateBR = (date: Date) => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+};
 
 const produtos = ['Orange', 'Lime', 'Lemon', 'Tangerine'];
 
@@ -473,7 +480,7 @@ export default function LancamentoRapido() {
             <Box id="title" sx={{ fontSize: 24, fontWeight: 'bold', textAlign: 'center' }}>
                 <Typography variant="h4">Lançamentos</Typography>
             </Box>
-            <Box>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
                 <Input type="date" value={date.toISOString().substring(0, 10)} onChange={(e) => setDate(new Date(e.target.value))} />
             </Box>
 
@@ -484,8 +491,10 @@ export default function LancamentoRapido() {
             </Tabs>
 
             {tabIndex === 0 && (
-                <>
-                    <Box sx={{ width: '40%', alignSelf: 'center' }}>
+                <Card sx={{ width: '90%', maxWidth: 800, alignSelf: 'center' }}>
+                    <CardContent>
+                        <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>Horímetros por Extrator</Typography>
+                        <Divider sx={{ mb: 3 }} />
                         <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
                             {extratores.map((extrator) => (
                                 <Accordion key={extrator.id} sx={{ width: '100%' }}>
@@ -563,14 +572,14 @@ export default function LancamentoRapido() {
                                 </Accordion>
                             ))}
                         </Box>
-                    </Box>
-                </>
+                    </CardContent>
+                </Card>
             )}
 
             {tabIndex === 1 && (
                 <Box sx={{ width: '80%', alignSelf: 'center' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                        <Typography variant="h6">Paradas para {date.toISOString().substring(0,10)}</Typography>
+                        <Typography variant="h6">Paradas para {formatDateBR(date)}</Typography>
                         <Button variant="contained" startIcon={<Add />} onClick={() => setNovaParadaOpen(true)}>
                             Nova Parada
                         </Button>
@@ -677,7 +686,7 @@ export default function LancamentoRapido() {
 
             {tabIndex === 2 && (
                 <Box sx={{ width: '80%', alignSelf: 'center' }}>
-                    <Typography variant="h6">Feedback Produção para {date.toISOString().substring(0,10)}</Typography>
+                    <Typography variant="h6">Feedback Produção para {formatDateBR(date)}</Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {produtos.map((produto) => {
                             const feedback = feedbacks.find(f => f.produto === produto);

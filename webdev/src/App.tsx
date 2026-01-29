@@ -6,6 +6,7 @@ import { Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
 import Config from './pages/Config'
 import LancamentoRapido from './pages/LancamentoRapido'
+import Reports from './pages/Reports'
 
 
 function Search() {
@@ -28,6 +29,7 @@ function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/config" element={<Config />} />
         <Route path="/transactions" element={<LancamentoRapido />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

@@ -123,6 +123,56 @@ declare global {
     delete_local: EelCall<{ message: string }>
 
     get_nominal_constant: EelCall<number>
+    calculate_nominal: EelCall<number>
+    
+    get_dashboard_stats: EelCall<{
+      periodo: string;
+      data_inicio: string;
+      data_fim: string;
+      summary: {
+        total_caixas: number;
+        capacidade_nominal: number;
+        eficiencia_nominal: number;
+        horas_trabalhadas: number;
+        horas_paradas: number;
+        minutos_parados: number;
+        disponibilidade: number;
+      };
+      status_extratores: Array<{
+        id: string;
+        numero: number;
+        modelo: string;
+        status: string;
+        motivo_parada: string | null;
+      }>;
+      top_motivos_parada: Array<{
+        motivo: string;
+        classificacao: string;
+        quantidade: number;
+        tempo_total_minutos: number;
+      }>;
+    }>
+    
+    get_timeline_paradas: EelCall<Array<{
+      extrator_id: string;
+      extrator_numero: number;
+      inicio: string;
+      fim: string;
+      motivo: string;
+      classificacao: string;
+      local: string | null;
+      observacoes: string | null;
+    }>>
+    
+    get_oee_stats: EelCall<{
+      periodo: string;
+      data_inicio: string;
+      data_fim: string;
+      disponibilidade: number;
+      performance: number;
+      qualidade: number;
+      oee: number;
+    }>
   }
 
   interface Window {

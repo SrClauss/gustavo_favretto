@@ -1,5 +1,7 @@
 import eel
-from app import api_horimetro, api_paradas, api_cadastros
+import json
+import os
+from app import api_horimetro, api_paradas, api_cadastros, api_dashboard
 from app.db import Base, engine, create_database_if_not_exists
 
 
@@ -234,3 +236,41 @@ def delete_local(local_id):
 def list_horimetros_by_date(dia):
     """Retorna horímetros de uma data específica"""
     return api_horimetro.list_horimetros_by_date(dia)
+
+
+# ===== CONFIGURAÇÕES =====
+
+@eel.expose
+def get_nominal_constant():
+    """Retorna a constante nominal do sistema"""
+    return api_dashboard.get_nominal_constant()
+
+
+@eel.expose
+def calculate_nominal(tamanho_fruta, caixas_produto, total_caixas):
+    """Calcula o nominal para um produto"""
+    return api_dashboard.calculate_nominal(
+        float(tamanho_fruta),
+        int(caixas_produto),
+        int(total_caixas)
+    )
+
+
+# ===== DASHBOARD =====
+
+@eel.expose
+def get_dashboard_stats(periodo='dia', data_ref=None):
+    """Retorna estatísticas consolidadas do dashboard"""
+    return api_dashboard.get_dashboard_stats(periodo, data_ref)
+
+
+@eel.expose
+def get_timeline_paradas(data):
+    """Retorna timeline de paradas para gráfico de Gantt"""
+    return api_dashboard.get_timeline_paradas(data)
+
+
+@eel.expose
+def get_oee_stats(periodo='dia', data_ref=None, extrator_id=None):
+    """Retorna cálculo de OEE"""
+    return api_dashboard.get_oee_stats(periodo, data_ref, extrator_id)
