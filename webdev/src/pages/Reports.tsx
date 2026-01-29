@@ -6,11 +6,14 @@ type Parada = {
     id: string;
     data: string;
     motivo: string;
-    hora_inicio: string;
-    hora_fim: string;
+    hora_inicio?: string;
+    hora_fim?: string;
     local_parada: string;
     observacoes?: string;
     extratores_parados: string[];
+    duracao_minutos?: number;
+    extrator_id?: string;
+    turno?: string;
 };
 
 type Motivo = { id: string; descricao: string; classificacao: string };
@@ -23,62 +26,70 @@ export default function Reports() {
     const [locais, setLocais] = useState<Local[]>([]);
     const [extratores, setExtratores] = useState<Extrator[]>([]);
     
-    const [dataInicio, setDataInicio] = useState<string>(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10));
-    const [dataFim, setDataFim] = useState<string>(new Date().toISOString().substring(0, 10));
+    const [dataInicio, setDataInicio] = useState<string>(() => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10));
+    const [dataFim, setDataFim] = useState<string>(() => new Date().toISOString().substring(0, 10));
     const [filtroMotivo, setFiltroMotivo] = useState<string>('');
     const [filtroExtrator, setFiltroExtrator] = useState<string>('');
 
     useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [motivosRes, locaisRes, extratoresRes] = await Promise.all([
+                    window.eel.list_motivos()(),
+                    window.eel.list_locais()(),
+                    window.eel.list_extratores()()
+                ]);
+
+                if (Array.isArray(motivosRes)) setMotivos(motivosRes as Motivo[]);
+                if (Array.isArray(locaisRes)) setLocais(locaisRes as Local[]);
+                if (Array.isArray(extratoresRes)) setExtratores(extratoresRes as Extrator[]);
+            } catch (err) {
+                console.error('Erro ao carregar dados:', err);
+            }
+        };
         loadData();
     }, []);
 
-    const loadData = async () => {
-        try {
-            const [motivosRes, locaisRes, extratoresRes] = await Promise.all([
-                window.eel.list_motivos()(),
-                window.eel.list_locais()(),
-                window.eel.list_extratores()()
-            ]);
-
-            if (Array.isArray(motivosRes)) setMotivos(motivosRes as Motivo[]);
-            if (Array.isArray(locaisRes)) setLocais(locaisRes as Local[]);
-            if (Array.isArray(extratoresRes)) setExtratores(extratoresRes as Extrator[]);
-        } catch (err) {
-            console.error('Erro ao carregar dados:', err);
-        }
-    };
-
-    const loadParadas = async () => {
-        try {
-            const res = await window.eel.list_paradas()();
-            if (Array.isArray(res)) {
-                let paradasFiltradas = res as Parada[];
-                
-                // Filtrar por data
-                paradasFiltradas = paradasFiltradas.filter(p => 
-                    p.data >= dataInicio && p.data <= dataFim
-                );
-
-                // Filtrar por motivo
-                if (filtroMotivo) {
-                    paradasFiltradas = paradasFiltradas.filter(p => p.motivo === filtroMotivo);
-                }
-
-                // Filtrar por extrator
-                if (filtroExtrator) {
-                    paradasFiltradas = paradasFiltradas.filter(p => 
-                        p.extratores_parados.includes(filtroExtrator)
-                    );
-                }
-
-                setParadas(paradasFiltradas);
-            }
-        } catch (err) {
-            console.error('Erro ao carregar paradas:', err);
-        }
-    };
-
     useEffect(() => {
+        const loadParadas = async () => {
+            try {
+                const res = await window.eel.list_paradas()();
+                if (Array.isArray(res)) {
+                    let paradasFiltradas = (res as Parada[]).map(r => ({
+                        id: r.id,
+                        data: r.data,
+                        motivo: r.motivo,
+                        hora_inicio: r.hora_inicio,
+                        hora_fim: r.hora_fim,
+                        local_parada: r.local_parada,
+                        observacoes: r.observacoes,
+                        extratores_parados: r.extratores_parados ?? (r.extrator_id ? [r.extrator_id] : []),
+                        duracao_minutos: typeof r.duracao_minutos === 'number' ? r.duracao_minutos : undefined,
+                    })) as Parada[];
+                    
+                    // Filtrar por data
+                    paradasFiltradas = paradasFiltradas.filter(p => 
+                        p.data >= dataInicio && p.data <= dataFim
+                    );
+
+                    // Filtrar por motivo
+                    if (filtroMotivo) {
+                        paradasFiltradas = paradasFiltradas.filter(p => p.motivo === filtroMotivo);
+                    }
+
+                    // Filtrar por extrator
+                    if (filtroExtrator) {
+                        paradasFiltradas = paradasFiltradas.filter(p => 
+                            p.extratores_parados.includes(filtroExtrator)
+                        );
+                    }
+
+                    setParadas(paradasFiltradas);
+                }
+            } catch (err) {
+                console.error('Erro ao carregar paradas:', err);
+            }
+        };
         loadParadas();
     }, [dataInicio, dataFim, filtroMotivo, filtroExtrator]);
 
@@ -93,6 +104,12 @@ export default function Reports() {
         }
     };
 
+    const calcularDuracaoFromParada = (p: Parada): number => {
+        if (typeof p.duracao_minutos === 'number') return p.duracao_minutos;
+        if (p.hora_inicio && p.hora_fim) return calcularDuracao(p.hora_inicio, p.hora_fim);
+        return 0;
+    };
+
     const exportarCSV = () => {
         const headers = ['Data', 'Extratores', 'Motivo', 'Início', 'Fim', 'Duração (min)', 'Local', 'Observações'];
         const rows = paradas.map(p => {
@@ -103,14 +120,14 @@ export default function Reports() {
 
             const motivoDesc = motivos.find(m => m.id === p.motivo)?.descricao || p.motivo;
             const localDesc = locais.find(l => l.id === p.local_parada)?.descricao || p.local_parada;
-            const duracao = calcularDuracao(p.hora_inicio, p.hora_fim);
+            const duracao = calcularDuracaoFromParada(p);
 
             return [
                 p.data,
                 extratoresNomes,
                 motivoDesc,
-                p.hora_inicio,
-                p.hora_fim,
+                p.hora_inicio || '-',
+                p.hora_fim || '-',
                 duracao.toString(),
                 localDesc,
                 p.observacoes || ''
@@ -127,10 +144,6 @@ export default function Reports() {
         link.href = URL.createObjectURL(blob);
         link.download = `relatorio_paradas_${dataInicio}_${dataFim}.csv`;
         link.click();
-    };
-
-    const getMotivoClassificacao = (motivoId: string): string => {
-        return motivos.find(m => m.id === motivoId)?.classificacao || '';
     };
 
     const getClassificacaoColor = (classificacao: string) => {
@@ -231,7 +244,7 @@ export default function Reports() {
                                     </TableRow>
                                 ) : (
                                     paradas.map((parada) => {
-                                        const duracao = calcularDuracao(parada.hora_inicio, parada.hora_fim);
+                                        const duracao = calcularDuracaoFromParada(parada);
                                         const motivoObj = motivos.find(m => m.id === parada.motivo);
                                         const localObj = locais.find(l => l.id === parada.local_parada);
                                         

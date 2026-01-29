@@ -1,10 +1,26 @@
-import { Box, Card, CardContent, Typography, Grid, Select, MenuItem, FormControl, InputLabel, CircularProgress, Chip } from "@mui/material";
-import { useEffect, useState } from 'react';
+import { Box, Card, CardContent, Typography, Select, MenuItem, FormControl, InputLabel, CircularProgress, Chip } from "@mui/material";
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import FactoryIcon from '@mui/icons-material/Factory';
+import KPI from "../components/KPI";
+
+// Estilos globais mínimos
+const globalStyles = `
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('kpi-styles')) {
+    const style = document.createElement('style');
+    style.id = 'kpi-styles';
+    style.textContent = globalStyles;
+    document.head.appendChild(style);
+}
 
 type DashboardStats = {
     periodo: string;
@@ -40,20 +56,16 @@ export default function Home() {
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
 
-    useEffect(() => {
-        loadDashboard();
-    }, [periodo, data]);
-
-    const loadDashboard = async () => {
+    const loadDashboard = useCallback(async () => {
         setLoading(true);
         try {
             if (!window.eel || typeof window.eel.get_dashboard_stats !== 'function') {
                 console.error('Eel bridge não disponível');
                 return;
             }
-            
+
             const result = await window.eel.get_dashboard_stats(periodo, data)();
-            
+
             if (result && typeof result === 'object' && !('error' in result)) {
                 setStats(result as DashboardStats);
             } else {
@@ -64,17 +76,44 @@ export default function Home() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [periodo, data]);
 
-    const getStatusColor = (status: string) => {
-        return status === 'Rodando' ? 'success' : 'error';
-    };
+    useEffect(() => {
+        loadDashboard();
+    }, [loadDashboard]);
 
-    const getEfficiencyColor = (value: number) => {
-        if (value >= 90) return 'success';
-        if (value >= 75) return 'warning';
-        return 'error';
-    };
+    const horasParadasPorClassificacao = useMemo(() => {
+        if (!stats) return { Disponibilidade: 0, Performance: 0, Qualidade: 0 };
+        const grouped = stats.top_motivos_parada.reduce((acc, item) => {
+            acc[item.classificacao] = (acc[item.classificacao] || 0) + item.tempo_total_minutos / 60; // converter para horas
+            return acc;
+        }, {} as Record<string, number>);
+        return {
+            Disponibilidade: grouped['Disponibilidade'] || 0,
+            Performance: grouped['Performance'] || 0,
+            Qualidade: grouped['Qualidade'] || 0,
+        };
+    }, [stats]);
+
+    const kpiMetrics = useMemo(() => {
+        if (!stats) return { totalParadas: 0, tempoProdutivo: 0, faltaApontar: 0, totalHoras: 0 };
+
+        const totalParadas = stats.top_motivos_parada.reduce((s, it) => s + (it.quantidade || 0), 0);
+
+        const horas_trabalhadas = Number(stats.summary.horas_trabalhadas || 0);
+        const horas_paradas = Number(stats.summary.horas_paradas || 0);
+        const tempoProdutivo = Math.max(0, horas_trabalhadas - horas_paradas);
+
+        const faltaApontar = stats.top_motivos_parada.reduce((s, it) => {
+            const m = (it.motivo || '').toLowerCase();
+            if (m.includes('apont') || m.includes('choko') || m.includes('chokotei')) return s + (it.quantidade || 0);
+            return s;
+        }, 0);
+
+        const totalHoras = horas_trabalhadas + horas_paradas;
+
+        return { totalParadas, tempoProdutivo, faltaApontar, totalHoras };
+    }, [stats]);
 
     if (loading) {
         return (
@@ -98,9 +137,9 @@ export default function Home() {
                 <Typography variant="h4" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
                     Dashboard Operacional
                 </Typography>
-                
-                <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ flex: '1 1 300px' }}>
                         <FormControl fullWidth>
                             <InputLabel>Período</InputLabel>
                             <Select value={periodo} label="Período" onChange={(e) => setPeriodo(e.target.value)}>
@@ -109,8 +148,8 @@ export default function Home() {
                                 <MenuItem value="mes">Mês</MenuItem>
                             </Select>
                         </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
+                    </Box>
+                    <Box sx={{ flex: '1 1 300px' }}>
                         <FormControl fullWidth>
                             <input
                                 type="date"
@@ -126,171 +165,250 @@ export default function Home() {
                                 }}
                             />
                         </FormControl>
-                    </Grid>
-                </Grid>
+                    </Box>
+                </Box>
             </Box>
 
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ height: '100%' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                                    Total Caixas
-                                </Typography>
-                                <TrendingUpIcon sx={{ color: 'primary.main', opacity: 0.3, fontSize: 40 }} />
-                            </Box>
-                            <Typography variant="h3" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                                {stats.summary.total_caixas.toLocaleString()}
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
 
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ height: '100%' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                                    Eficiência Nominal
-                                </Typography>
-                                <CheckCircleIcon sx={{ color: getEfficiencyColor(stats.summary.eficiencia_nominal) + '.main', opacity: 0.3, fontSize: 40 }} />
-                            </Box>
-                            <Typography variant="h3" sx={{ fontWeight: 700, color: getEfficiencyColor(stats.summary.eficiencia_nominal) + '.main' }}>
-                                {stats.summary.eficiencia_nominal.toFixed(1)}%
-                            </Typography>
-                            <Chip 
-                                label={stats.summary.eficiencia_nominal >= 90 ? 'Excelente' : stats.summary.eficiencia_nominal >= 75 ? 'Bom' : 'Atenção'} 
-                                color={getEfficiencyColor(stats.summary.eficiencia_nominal)}
-                                size="small"
-                                sx={{ mt: 0.5 }}
-                            />
-                        </CardContent>
-                    </Card>
-                </Grid>
+            <Box sx={{ display: 'flex', width: '100%', justifyContent: 'center', flexWrap: 'wrap', gap: 3, mb: 4 }}>
+            <Box sx={{ display: 'flex', width: '100%', justifyContent: 'center', flexWrap: 'wrap', gap: 3, mb: 4 }}>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Total Paradas"
+                        value={`${kpiMetrics.totalParadas}`}
+                        icon={<WarningIcon />}
+                        color="error"
+                        bottomText="Ocorrências" 
+                    />
+                </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Tempo Produtivo"
+                        value={`${kpiMetrics.tempoProdutivo.toFixed(1)}h`}
+                        icon={<TrendingUpIcon />}
+                        color="success"
+                        bottomText="Horas efetivas"
+                    />
+                </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Falta Apontar / Chokotei"
+                        value={`${kpiMetrics.faltaApontar}`}
+                        icon={<WarningIcon />}
+                        color="warning"
+                        bottomText="Ajustes pendentes"
+                    />
+                </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Total de Horas"
+                        value={`${kpiMetrics.totalHoras.toFixed(1)}h`}
+                        icon={<AccessTimeIcon />}
+                        color="primary"
+                        bottomText="Horas totais"
+                    />
+                </Box>
 
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ height: '100%' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                                    Disponibilidade
-                                </Typography>
-                                <AccessTimeIcon sx={{ color: 'success.main', opacity: 0.3, fontSize: 40 }} />
-                            </Box>
-                            <Typography variant="h3" sx={{ fontWeight: 700, color: 'success.main' }}>
-                                {stats.summary.disponibilidade.toFixed(1)}%
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                {stats.summary.horas_trabalhadas.toFixed(1)}h trabalhadas
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ height: '100%' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                                    Tempo Parado
-                                </Typography>
-                                <WarningIcon sx={{ color: 'error.main', opacity: 0.3, fontSize: 40 }} />
-                            </Box>
-                            <Typography variant="h3" sx={{ fontWeight: 700, color: 'error.main' }}>
-                                {stats.summary.horas_paradas.toFixed(1)}h
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ height: '100%' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                                    Capacidade Nominal
-                                </Typography>
-                                <FactoryIcon sx={{ color: 'info.main', opacity: 0.3, fontSize: 40 }} />
-                            </Box>
-                            <Typography variant="h3" sx={{ fontWeight: 700, color: 'info.main' }}>
-                                {stats.summary.capacidade_nominal.toLocaleString()}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                caixas/hora
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
-
-            <Card sx={{ mb: 4 }}>
-                <CardContent>
-                    <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+            </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Paradas - Disponibilidade"
+                        value={`${horasParadasPorClassificacao.Disponibilidade.toFixed(1)}h`}
+                        icon={<AccessTimeIcon />}
+                        color="error"
+                        bottomText="Tempo perdido"
+                    />
+                </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Paradas - Performance"
+                        value={`${horasParadasPorClassificacao.Performance.toFixed(1)}h`}
+                        icon={<WarningIcon />}
+                        color="warning"
+                        bottomText="Ineficiências"
+                    />
+                </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Paradas - Qualidade"
+                        value={`${horasParadasPorClassificacao.Qualidade.toFixed(1)}h`}
+                        icon={<CheckCircleIcon />}
+                        color="info"
+                        bottomText="Problemas de qualidade"
+                    />
+                </Box>
+                <Box sx={{ flex: '0 0 20%' }}>
+                    <KPI
+                        title="Capacidade Nominal"
+                        value={stats.summary.capacidade_nominal}
+                        icon={<FactoryIcon />}
+                        color="primary"
+                        bottomText="Caixas processadas"
+                    />
+                </Box>
+            </Box>
+             
+            <Card sx={{
+                mb: 4,
+                backgroundColor: '#fafafa',
+                border: '1px solid #e0e0e0',
+                borderRadius: 2,
+                boxShadow: 'none'
+            }}>
+                <CardContent sx={{ p: 4 }}>
+                    <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: '#424242', fontSize: '1.1rem' }}>
                         Status dos Extratores
                     </Typography>
-                    <Grid container spacing={2}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2.5 }}>
                         {stats.status_extratores.map((extrator) => (
-                            <Grid item xs={12} sm={6} md={4} lg={3} key={extrator.id}>
-                                <Card 
-                                    variant="outlined" 
-                                    sx={{ 
-                                        borderColor: extrator.status === 'Rodando' ? 'success.main' : 'error.main',
-                                        borderWidth: 2,
+                            <Box sx={{ flex: '1 1 250px' }} key={extrator.id}>
+                                <Card
+                                    sx={{
+                                        backgroundColor: '#fff',
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: 2,
+                                        borderLeft: `4px solid ${extrator.status === 'Rodando' ? '#2e7d32' : '#d32f2f'}`,
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': {
+                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                            transform: 'translateY(-2px)',
+                                        }
                                     }}
                                 >
-                                    <CardContent>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                            <Typography variant="h6">Extrator {extrator.numero}</Typography>
-                                            <Chip label={extrator.status} color={getStatusColor(extrator.status)} size="small" />
-                                        </Box>
-                                        <Typography variant="body2" color="textSecondary">{extrator.modelo}</Typography>
-                                        {extrator.motivo_parada && (
-                                            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'error.dark' }}>
-                                                {extrator.motivo_parada}
+                                    <CardContent sx={{ p: 2.5 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#424242' }}>
+                                                Extrator {extrator.numero}
                                             </Typography>
+                                            <Chip
+                                                label={extrator.status}
+                                                size="small"
+                                                sx={{
+                                                    backgroundColor: extrator.status === 'Rodando' ? '#e8f5e9' : '#ffebee',
+                                                    color: extrator.status === 'Rodando' ? '#2e7d32' : '#d32f2f',
+                                                    fontWeight: 600,
+                                                    fontSize: '0.7rem',
+                                                    height: 22
+                                                }}
+                                            />
+                                        </Box>
+                                        <Typography variant="body2" sx={{ color: '#757575', mb: 1 }}>
+                                            {extrator.modelo}
+                                        </Typography>
+                                        {extrator.motivo_parada && (
+                                            <Box sx={{
+                                                backgroundColor: '#fff3e0',
+                                                borderRadius: 1,
+                                                p: 1,
+                                                mt: 1.5,
+                                                borderLeft: '3px solid #ff9800'
+                                            }}>
+                                                <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 500, lineHeight: 1.4 }}>
+                                                    {extrator.motivo_parada}
+                                                </Typography>
+                                            </Box>
                                         )}
                                     </CardContent>
                                 </Card>
-                            </Grid>
+                            </Box>
                         ))}
-                    </Grid>
+                    </Box>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardContent>
-                    <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+            <Card sx={{
+                backgroundColor: '#fafafa',
+                border: '1px solid #e0e0e0',
+                borderRadius: 2,
+                boxShadow: 'none'
+            }}>
+                <CardContent sx={{ p: 4 }}>
+                    <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: '#424242', fontSize: '1.1rem' }}>
                         Top 5 Motivos de Parada
                     </Typography>
                     {stats.top_motivos_parada.length === 0 ? (
-                        <Typography color="textSecondary">Nenhuma parada registrada</Typography>
+                        <Box sx={{
+                            textAlign: 'center',
+                            py: 6,
+                            backgroundColor: '#fff',
+                            border: '1px dashed #bdbdbd',
+                            borderRadius: 2
+                        }}>
+                            <Typography sx={{ color: '#9e9e9e', fontWeight: 500 }}>
+                                Nenhuma parada registrada
+                            </Typography>
+                        </Box>
                     ) : (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {stats.top_motivos_parada.map((motivo, index) => (
-                                <Box key={index}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                        <Box sx={{ display: 'flex', gap: 1 }}>
-                                            <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                                                {index + 1}. {motivo.motivo}
-                                            </Typography>
-                                            <Chip label={motivo.classificacao} size="small" variant="outlined" />
+                                <Box key={index} sx={{
+                                    backgroundColor: '#fff',
+                                    border: '1px solid #e0e0e0',
+                                    borderRadius: 2,
+                                    p: 2.5,
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                                        borderColor: '#bdbdbd',
+                                    }
+                                }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flex: 1 }}>
+                                            <Box sx={{
+                                                backgroundColor: '#f5f5f5',
+                                                border: '2px solid #e0e0e0',
+                                                borderRadius: '50%',
+                                                minWidth: 28,
+                                                height: 28,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontWeight: 700,
+                                                fontSize: '0.875rem',
+                                                color: '#616161'
+                                            }}>
+                                                {index + 1}
+                                            </Box>
+                                            <Box sx={{ flex: 1 }}>
+                                                <Typography variant="body1" sx={{ fontWeight: 600, color: '#424242', mb: 0.75 }}>
+                                                    {motivo.motivo}
+                                                </Typography>
+                                                <Chip
+                                                    label={motivo.classificacao}
+                                                    size="small"
+                                                    sx={{
+                                                        backgroundColor: '#f5f5f5',
+                                                        color: '#616161',
+                                                        fontWeight: 500,
+                                                        fontSize: '0.7rem',
+                                                        height: 22
+                                                    }}
+                                                />
+                                            </Box>
                                         </Box>
-                                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'error.main' }}>
+                                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#d32f2f', fontSize: '1.25rem' }}>
                                             {(motivo.tempo_total_minutos / 60).toFixed(1)}h
                                         </Typography>
                                     </Box>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <Box sx={{ flex: 1, backgroundColor: '#eee', borderRadius: 1, height: 24 }}>
-                                            <Box 
-                                                sx={{ 
-                                                    height: '100%', 
-                                                    backgroundColor: 'error.main',
+                                        <Box sx={{
+                                            flex: 1,
+                                            backgroundColor: '#f5f5f5',
+                                            borderRadius: 1,
+                                            height: 8,
+                                            overflow: 'hidden'
+                                        }}>
+                                            <Box
+                                                sx={{
+                                                    height: '100%',
+                                                    backgroundColor: '#d32f2f',
                                                     width: `${Math.min((motivo.tempo_total_minutos / Math.max(...stats.top_motivos_parada.map(m => m.tempo_total_minutos))) * 100, 100)}%`,
+                                                    borderRadius: 1,
+                                                    transition: 'width 0.6s ease-out'
                                                 }}
                                             />
                                         </Box>
-                                        <Typography variant="caption" color="textSecondary">
+                                        <Typography variant="caption" sx={{ color: '#757575', fontWeight: 500, minWidth: 'fit-content' }}>
                                             {motivo.quantidade} ocorrências
                                         </Typography>
                                     </Box>
