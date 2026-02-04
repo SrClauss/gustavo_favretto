@@ -1,3 +1,10 @@
+## **Análise e Recomendações de Relatórios/Gráficos**
+
+### **Análise**
+Nesta seção, apresentaremos uma análise detalhada dos dados coletados durante o processo de migração, incluindo gráficos e relatórios que ilustram o progresso e os desafios enfrentados.
+
+### **Recomendações**
+Com base na análise, recomenda-se a implementação de melhorias contínuas e ajustes nas funcionalidades para otimizar a experiência do usuário e a eficiência do sistema.
 # Plano de Migração para Tauri e Sled
 
 > **Status (03/02/2026):** Migração do backend Rust COMPLETA ✅ | Frontend integrado ✅ | Testes unitários criados ✅  
@@ -317,3 +324,46 @@ Restart-Computer
 
 ### **Testes falhando "DB already initialized"**
 **RESOLVIDO:** `init_db()` agora é idempotente, testes usam `init_db_temporary()`
+
+## **Sugestões detalhadas de Relatórios e Gráficos**
+
+A seguir uma versão consolidada e priorizada das recomendações de relatórios/visualizações a implementar na aplicação, com observações técnicas e endpoints sugeridos.
+
+### Prioridade Alta (entrega inicial)
+- **KPI Cards (Dashboard)**: Disponibilidade, Performance, Qualidade, OEE, Produção nominal diária. Mostrar variação diária e meta. (UI: cards com delta percentual)
+- **Séries temporais (Line charts)**: Disponibilidade/Performance/Qualidade por dia e por turno. Suportar range picker (dia/semana/mês).
+- **Produção por produto**: linha + stacked area ou stacked bar para participação de cada produto.
+- **Pareto de Paradas**: motivo x tempo total perdido (gráfico de barras + tabela ordenada).
+
+### Prioridade Média
+- **Heatmap Extrator × Turno**: performance ou tempo de inatividade por combinação (ajuda a localizar gargalos).
+- **Tabela exportável (CSV/XLSX/PDF)**: listagem diária com filtros (data, extrator, produto, motivo). Usar paginação/server-side.
+- **Relatório de tendência com anomalias**: marcar dias com variação fora da faixa esperada.
+
+### Prioridade Baixa / Avançada
+- **Relatório agendado**: gerar e enviar por e-mail PDF/XLSX automaticamente (daily/weekly).
+- **Construtor de relatórios (saved templates)**: permitir ao usuário montar relatórios customizados e salvar templates.
+
+### Visualizações Interativas e UX
+- Tooltips ricos com link para o registro de origem (permitir abrir detalhe do horímetro/parada).  
+- Zoom & brush em séries temporais para analisar janelas específicas.  
+- Drill-down: clicar em um ponto do gráfico abre a tabela com registros detalhados.
+
+### Endpoints/API recomendados
+- `GET /reports/production?from=&to=&group_by=product,turno` — agregados por produto/turno.  
+- `GET /reports/stops?from=&to=&group_by=motivo` — agregados/pareto.  
+- `GET /reports/extractor_heatmap?from=&to=` — matriz extrator×turno.
+
+### Implementação técnica (observações)
+- Faça agregações pesadas server-side e armazene resultados em cache (evitar recalcular para cada visualização).  
+- Use bibliotecas interativas no frontend: ECharts/Recharts para gráficos, TanStack Table / AG Grid para tabelas.  
+- Exportação: SheetJS para XLSX, jsPDF/puppeteer para PDF (server-side quando necessário).
+
+### Métricas de sucesso e validação
+- As métricas do dashboard devem bater com as planilhas em até 1% de diferença; validar com amostra de 7 dias.  
+- Tempo de geração de relatórios chave < 30s em máquina padrão.
+
+### Próximos passos sugeridos
+1. Workshop com usuários (30–60min) para priorizar 3 relatórios que geram maior impacto.  
+2. Implementar endpoints de agregação e um protótipo rápido do dashboard (KPI + 2 gráficos) em 1 sprint.  
+3. Adicionar export e scheduler no segundo sprint.

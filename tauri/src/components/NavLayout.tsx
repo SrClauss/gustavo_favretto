@@ -17,7 +17,6 @@ const NAVIGATION_ITEMS: NavItem[] = [
   { label: 'Dashboard', icon: 'Dashboard', to: '/' },
   { label: 'Lançamentos', icon: 'PlaylistAdd', to: '/transactions' },
   { label: 'Relatórios', icon: 'Assessment', to: '/reports' },
-  { label: 'Extratores', icon: 'Build', to: '/status-extratores' },
   { label: 'Cadastros', icon: 'Settings', to: '/config' },
 ]
 

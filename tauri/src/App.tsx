@@ -7,7 +7,6 @@ import Home from './pages/Home'
 import Config from './pages/Config'
 import LancamentoRapido from './pages/LancamentoRapido'
 import Reports from './pages/Reports'
-import StatusExtratores from './pages/StatusExtratores'
 
 
 function Search() {
@@ -31,7 +30,6 @@ function App() {
         <Route path="/config" element={<Config />} />
         <Route path="/transactions" element={<LancamentoRapido />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/status-extratores" element={<StatusExtratores />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

@@ -1,4 +1,4 @@
-import { Edit, Save, Comment, Add } from "@mui/icons-material";
+import { Edit, Save, Comment, Add, Delete } from "@mui/icons-material";
 import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Input, TextField, Typography, Badge, Tabs, Tab, Button, Select, MenuItem, FormControl, InputLabel, Checkbox, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Card, CardContent, Divider } from "@mui/material";
 import { useEffect, useState, useReducer } from "react";
 
@@ -144,6 +144,8 @@ export default function LancamentoRapido() {
 
     const [tempTamanho, setTempTamanho] = useState<Record<string, string>>({});
     const [tempCaixas, setTempCaixas] = useState<Record<string, string>>({});
+
+    const [feedbackEditing, setFeedbackEditing] = useState<Record<string, boolean>>({});
 
     const [nominalConstant, setNominalConstant] = useState<number>(8784000);
 
@@ -473,6 +475,8 @@ export default function LancamentoRapido() {
             return;
         }
 
+        const existingFeedback = feedbacks.find(f => f.produto === produto);
+
         const payload = {
             data: dateString,
             produto: produto,
@@ -481,11 +485,20 @@ export default function LancamentoRapido() {
         };
 
         try {
-            const res = await window.eel.create_feedback(payload)();
+            let res;
+            if (existingFeedback) {
+                // Atualizar existente
+                res = await window.eel.update_feedback(existingFeedback.id, payload)();
+            } else {
+                // Criar novo
+                res = await window.eel.create_feedback(payload)();
+            }
+            
             if (res && 'error' in res) {
                 alert(`Erro: ${res.error}`);
                 return;
             }
+            
             // Reload feedbacks
             const resReload = await window.eel.list_feedbacks(dateString)();
             if (Array.isArray(resReload)) {
@@ -500,9 +513,40 @@ export default function LancamentoRapido() {
                 setTempTamanho(newTempTamanho);
                 setTempCaixas(newTempCaixas);
             }
+            setFeedbackEditing(prev => ({ ...prev, [produto]: false }));
         } catch (err) {
             console.error(err);
             alert('Erro ao salvar feedback');
+        }
+    };
+
+    const handleDeleteFeedback = async (produto: string) => {
+        const feedback = feedbacks.find(f => f.produto === produto);
+        if (!feedback) {
+            alert('Nenhum dado encontrado para esta fruta');
+            return;
+        }
+        if (!confirm('Tem certeza que deseja apagar os dados desta fruta?')) return;
+
+        try {
+            await window.eel.delete_feedback(feedback.id)();
+            // Reload feedbacks
+            const resReload = await window.eel.list_feedbacks(date.toISOString().substring(0, 10))();
+            if (Array.isArray(resReload)) {
+                setFeedbacks(resReload as unknown as FeedBackProducao[]);
+                // Re-inicializar temp
+                const newTempTamanho: Record<string, string> = {};
+                const newTempCaixas: Record<string, string> = {};
+                (resReload as unknown as FeedBackProducao[]).forEach(f => {
+                    newTempTamanho[f.produto] = String(f.tamanho_da_fruta);
+                    newTempCaixas[f.produto] = String(f.caixas_processadas);
+                });
+                setTempTamanho(newTempTamanho);
+                setTempCaixas(newTempCaixas);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao deletar feedback');
         }
     };
 
@@ -806,6 +850,7 @@ export default function LancamentoRapido() {
 
                             const tamanhoNum = parseFloat(tamanhoStr) || 0;
                             const caixasNum = parseInt(caixasStr) || 0;
+                            const isEditing = feedbackEditing[produto];
 
                             return (
                                 <Box key={produto} sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', padding: 2, border: '1px solid #eee', borderRadius: 1 }}>
@@ -818,6 +863,7 @@ export default function LancamentoRapido() {
                                         onChange={(e) => setTempTamanho(prev => ({ ...prev, [produto]: e.target.value }))}
                                         inputProps={{ step: 0.01, min: 0 }}
                                         sx={{ flex: 1 }}
+                                        disabled={!isEditing}
                                     />
                                     <TextField
                                         label="Caixas Processadas"
@@ -827,18 +873,42 @@ export default function LancamentoRapido() {
                                         onChange={(e) => setTempCaixas(prev => ({ ...prev, [produto]: e.target.value }))}
                                         inputProps={{ min: 0 }}
                                         sx={{ flex: 1 }}
+                                        disabled={!isEditing}
                                     />
                                     <Typography variant="body2" sx={{ minWidth: 100 }}>
                                         Nominal: {(() => {
                                             const totalCaixas = Object.values(tempCaixas).reduce((sum, v) => sum + (parseInt(v as string) || 0), 0);
-                                            return tamanhoNum > 0 && totalCaixas > 0 ? (((nominalConstant * 5 * 60 * 11 * 24) / tamanhoNum) * (caixasNum / totalCaixas)).toFixed(2) : '0.00';
+                                            // Fórmula do Excel: ((110.909090909091*5)/B13*60*11*24)*(B14/SOMA(...))
+                                            // Pela precedência do Excel: (110.909090909091*5)/B13*60*11*24 = ((110.909090909091*5)/B13)*60*11*24
+                                            // = (554.545454545455/B13)*15840 = 8_784_000/B13
+                                            // Resultado final: (8_784_000 / tamanho) * (caixas / totalCaixas)
+                                            const FATOR = 8784000; // 110.909090909091 * 5 * 60 * 11 * 24
+                                            if (tamanhoNum <= 0 || totalCaixas <= 0) return '0.00';
+                                            const nominal = (FATOR / tamanhoNum) * (caixasNum / totalCaixas);
+                                            console.log(`[${produto}] tamanho=${tamanhoNum}, caixas=${caixasNum}, total=${totalCaixas}, nominal=${nominal.toFixed(2)}`);
+                                            return nominal.toFixed(2);
                                         })()}
                                     </Typography>
                                     <IconButton 
+                                        onClick={() => setFeedbackEditing(prev => ({ ...prev, [produto]: true }))}
+                                        disabled={isEditing}
+                                        color="secondary"
+                                    >
+                                        <Edit />
+                                    </IconButton>
+                                    <IconButton 
                                         onClick={() => handleSalvarFeedback(produto)}
+                                        disabled={!isEditing}
                                         color="primary"
                                     >
                                         <Save />
+                                    </IconButton>
+                                    <IconButton 
+                                        onClick={() => handleDeleteFeedback(produto)}
+                                        disabled={!feedback}
+                                        color="error"
+                                    >
+                                        <Delete />
                                     </IconButton>
                                 </Box>
                             );
