@@ -21,7 +21,7 @@ def say_hello(name):
 if __name__ == '__main__':
     # modo de desenvolvimento com Vite (React) — aponta para o dev server do Vite
     # para usar o modo dev, execute antes: npm run dev (ou npx vite) que por padrão usa a porta 5173
-    DEV = True
+    DEV = False
 
     if DEV:
         # abre a URL do dev server em vez de um arquivo local
